@@ -10,21 +10,17 @@ ENV DISPLAY=:20
 # Run simple window manager on startup
 RUN echo 'openbox-session 2> /dev/null || true &' >> /root/.bashrc
 
-ADD https://api.github.com/repos/justasb/OlfactoryBulb/git/refs/heads/master version.json
-RUN git clone https://github.com/justasb/OlfactoryBulb; rm -rf /OlfactoryBulb/.git
-WORKDIR "/OlfactoryBulb"
-
 RUN conda install pandas=1.0.3 llvmlite=0.34.0 -y
 RUN python -m pip install pip==9.0.3
-RUN pip install -r requirements.txt
+RUN pip install pysqlite3==0.4.3 jupyterlab==0.31.5 blenderneuron==2.0.4 Cython==0.28.1 jsonpickle==0.9.6 matplotlib==2.2.2 mpi4py==3.0.0 neo==0.6.1 sciunit neuronunit numpy==1.18.5 pandas==1.0.3 peewee==3.13.3 quantities==0.12.1 scipy==1.4.1 deap==1.2.2 LFPsimpy==0.1.1
 
 # Compile mod files
-WORKDIR "/OlfactoryBulb/prev_ob_models"
-RUN ./compile_mod.sh
-WORKDIR "/OlfactoryBulb"
+#WORKDIR "/OlfactoryBulb/prev_ob_models"
+#RUN ./compile_mod.sh
+#WORKDIR "/OlfactoryBulb"
 
 # Start container terminal model dir
-RUN echo 'cd /OlfactoryBulb' >> /root/.bashrc
+#RUN echo 'cd /OlfactoryBulb' >> /root/.bashrc
 EXPOSE 8888
 
 # Create a vnc server to share the screen and jupyter lab to view the notebook
