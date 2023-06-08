@@ -6,6 +6,7 @@ except:
 import os
 import numpy as np
 import json
+import yaml
 from prev_ob_models.Birgiolas2020.isolated_cells import *
 from blenderneuron.nrn.neuronnode import NeuronNode
 from olfactorybulb.database import Odor, OdorGlom, CellModel, database
@@ -94,6 +95,8 @@ class OlfactoryBulb:
 
         # Add glomerular inputs
         for time, odor_info in params.input_odors.items():
+            # if params.name == 'GammaSignature_delay':
+            time += params.sim_delay
             self.add_inputs(odor=odor_info["name"], t=time, rel_conc=odor_info["rel_conc"])
 
         # LFP
@@ -121,6 +124,10 @@ class OlfactoryBulb:
                     os.makedirs(self.results_dir)
 
             self.save_recorded_vectors()
+
+            delay_dict = {'delay': params.sim_delay}
+            with open(os.path.join(self.results_dir,'delay.yml'), 'w') as outfile:
+                yaml.dump(delay_dict, outfile, default_flow_style=False)
 
             if self.mpirank == 0:
                 t, lfp = self.get_lfp()

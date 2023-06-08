@@ -199,3 +199,13 @@ class NMDA_block(GammaSignature):
 
     def __init__(self):
         self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0
+
+
+class GammaSignature_DelayTwelve(GammaSignature):
+    sim_delay = 12  # ms
+
+class GammaSignature_DelayTwenty(GammaSignature):
+    sim_delay = 20  # ms
+
+class GammaSignature_DelayFifty(GammaSignature):
+    sim_delay = 50  # ms
