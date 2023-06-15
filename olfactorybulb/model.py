@@ -7,7 +7,7 @@ import os
 import numpy as np
 import json
 import yaml
-from prev_ob_models.Birgiolas2020.isolated_cells import *
+from prev_ob_models.Doxey2022.isolated_cells import *
 from blenderneuron.nrn.neuronnode import NeuronNode
 from olfactorybulb.database import Odor, OdorGlom, CellModel, database
 from math import pow
@@ -126,7 +126,13 @@ class OlfactoryBulb:
             self.save_recorded_vectors()
 
             params_dict = {'delay': params.sim_setup_time,
-                           'rel_conc_scale': params.rel_conc_scale}
+                           'rel_conc_scale': params.rel_conc_scale,
+                           'gaba_tau1': params.synapse_properties['GabaSyn']['tau1'],
+                           'gaba_tau2': params.synapse_properties['GabaSyn']['tau2'],
+                           'mc_input_weight': params.mc_input_weight,
+                           'tc_input_weight': params.tc_input_weigth,
+                           'mc_gap_junction_gmax': params.gap_junction_gmax['MC'],
+                           'tc_gap_junction_gmax': params.gap_junction_gmax['TC']}
             with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
                 yaml.dump(params_dict, outfile, default_flow_style=False)
 
