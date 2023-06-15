@@ -95,7 +95,7 @@ class OlfactoryBulb:
 
         # Add glomerular inputs
         for time, odor_info in params.input_odors.items():
-            # if params.name == 'GammaSignature_delay':
+            # Method 1
             time += params.sim_delay
             self.add_inputs(odor=odor_info["name"], t=time, rel_conc=odor_info["rel_conc"])
 
@@ -125,9 +125,10 @@ class OlfactoryBulb:
 
             self.save_recorded_vectors()
 
-            delay_dict = {'delay': params.sim_delay}
-            with open(os.path.join(self.results_dir,'delay.yml'), 'w') as outfile:
-                yaml.dump(delay_dict, outfile, default_flow_style=False)
+            params_dict = {'delay': params.sim_delay,
+                           'rel_conc_scale': params.rel_conc_scale}
+            with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
+                yaml.dump(params_dict, outfile, default_flow_style=False)
 
             if self.mpirank == 0:
                 t, lfp = self.get_lfp()
@@ -191,6 +192,9 @@ class OlfactoryBulb:
             else:  # "TC"
                 delay = self.params.tc_input_delay
                 weight = self.params.tc_input_weight
+
+            # Method 2
+            # delay += self.params.sim_delay
 
             # VecStim will deliver events to synapse at vector times
             ns = h.VecStim()

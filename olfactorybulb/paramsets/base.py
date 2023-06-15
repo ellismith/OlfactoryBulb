@@ -58,6 +58,8 @@ class SilentNetwork:
         1800: {"name": "Apple", "rel_conc": 0.2},
     }
 
+    rel_conc_scale = 1
+
     # From Manabe & Mori (2013) fast: 100-150ms, slow: 150 ms
     inhale_duration = 125  # ms
 
