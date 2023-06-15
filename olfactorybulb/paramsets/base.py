@@ -14,11 +14,11 @@ class SilentNetwork:
     slice_name = "DorsalColumnSlice"
 
     sim_dt = 1 / 10.0
-    sim_delay = 0
+    sim_setup_time = 0
 
     recording_period = 1 / 10.0  # ms
 
-    tstop = 800.1 + sim_delay  # ms
+    tstop = 800.1 + sim_setup_time  # ms
 
     # GJs disabled
     gap_juction_gmax = {
