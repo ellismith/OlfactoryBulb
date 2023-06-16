@@ -21,7 +21,7 @@ class SilentNetwork:
     tstop = 800.1 + sim_setup_time  # ms
 
     # GJs disabled
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         "MC": 0,
         "TC": 0,
     }
@@ -32,11 +32,14 @@ class SilentNetwork:
             'gmax': 0,
 
             'ltpinvl': 0,  # Disable plasticity
-            'ltdinvl': 0
+            'ltdinvl': 0,
+
+            'nmdatoggle': 1  # enable NMDA
         },
 
         "GabaSyn": {
             'gmax': 0,
+            'tau1': 1,
             'tau2': 100,
 
             'ltpinvl': 0,  # Disable plasticity

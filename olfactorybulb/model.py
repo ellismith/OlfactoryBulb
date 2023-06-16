@@ -84,7 +84,7 @@ class OlfactoryBulb:
         self.load_glom_cells()
 
         # Create gap junctions between MC and TC tufts
-        for cell_type, g_gap in params.gap_juction_gmax.items():
+        for cell_type, g_gap in params.gap_junction_gmax.items():
             self.add_gap_junctions(cell_type, g_gap)
 
         # Set synapse parameters
@@ -125,14 +125,15 @@ class OlfactoryBulb:
 
             self.save_recorded_vectors()
 
-            params_dict = {'delay': params.sim_setup_time,
+            params_dict = {'setup_time': params.sim_setup_time,
                            'rel_conc_scale': params.rel_conc_scale,
                            'gaba_tau1': params.synapse_properties['GabaSyn']['tau1'],
                            'gaba_tau2': params.synapse_properties['GabaSyn']['tau2'],
                            'mc_input_weight': params.mc_input_weight,
-                           'tc_input_weight': params.tc_input_weigth,
+                           'tc_input_weight': params.tc_input_weight,
                            'mc_gap_junction_gmax': params.gap_junction_gmax['MC'],
-                           'tc_gap_junction_gmax': params.gap_junction_gmax['TC']}
+                           'tc_gap_junction_gmax': params.gap_junction_gmax['TC'],
+                           'nmda_toggle': params.synapse_properties['AmpaNmdaSyn']['nmdatoggle']}
             with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
                 yaml.dump(params_dict, outfile, default_flow_style=False)
 

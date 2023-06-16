@@ -29,55 +29,55 @@ from olfactorybulb.paramsets.case_studies import GammaSignature
 
 class GammaSignature_GJ_0(GammaSignature):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         'MC': 0,
         'TC': 0,
     }
 class GammaSignature_GJ_1(GammaSignature):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         'MC': 1,
         'TC': 1,
     }
 class GammaSignature_GJ_2(GammaSignature):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         'MC': 2,
         'TC': 2,
     }
 class GammaSignature_GJ_4(GammaSignature):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         'MC': 4,
         'TC': 4,
     }
 class GammaSignature_GJ_8(GammaSignature):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         'MC': 8,
         'TC': 8,
     }
 class GammaSignature_GJ_16(GammaSignature):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         'MC': 16,
         'TC': 16,
     }
 class GammaSignature_GJ_32(GammaSignature):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         'MC': 32,
         'TC': 32,
     }
 class GammaSignature_GJ_64(GammaSignature):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         'MC': 64,
         'TC': 64,
     }
 class GammaSignature_GJ_128(GammaSignature):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         'MC': 128,
         'TC': 128,
     }

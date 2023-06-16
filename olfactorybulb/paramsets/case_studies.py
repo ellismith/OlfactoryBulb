@@ -14,7 +14,7 @@ class PureMCsWithGJs(SilentNetwork):
 
     description = "Pure MC input and enabled gap junctions"
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         "MC": 32,
         # "TC": 0,
     }
@@ -25,7 +25,7 @@ class PureTCsWithGJs(SilentNetwork):
 
     description = "Pure TC input and enabled gap junctions"
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         # "MC": 0,
         "TC": 32,
     }
@@ -34,7 +34,7 @@ class PureTCsWithGJs(SilentNetwork):
 
 class MCsWithGJsGCs(SilentNetwork):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         "MC": 32,
     }
 
@@ -61,7 +61,7 @@ class MCsWithGJsGCs(SilentNetwork):
 
 class TCsWithGJsGCs(SilentNetwork):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         "TC": 32,
     }
 
@@ -88,7 +88,7 @@ class TCsWithGJsGCs(SilentNetwork):
 
 class MC_TC_Combined_Base(TCsWithGJsGCs):
 
-    gap_juction_gmax = {
+    gap_junction_gmax = {
         "MC": 32,
         "TC": 32,
     }
@@ -110,11 +110,14 @@ class GammaSignature(MC_TC_Combined_Base):
             'gmax': 64,
 
             'ltpinvl': 0,  # Disable plasticity
-            'ltdinvl': 0
+            'ltdinvl': 0,
+
+            'nmdatoggle': 1  # enable NMDA
         },
 
         "GabaSyn": {
             'gmax': 2,
+            'tau1': 1,
             'tau2': 36,
 
             'ltpinvl': 0,  # Disable plasticity
@@ -137,7 +140,7 @@ class GammaSignature_NoTCGJs(GammaSignature):
     description = "Disabling TC GJs should abolish synchronized early TC firing"
 
     def __init__(self):
-        self.gap_juction_gmax["TC"] = 0
+        self.gap_junction_gmax["TC"] = 0
 
 
 class GammaSignature_NoMCGJs(GammaSignature):
@@ -145,7 +148,7 @@ class GammaSignature_NoMCGJs(GammaSignature):
     description = "Disabling MC GJs should abolish synchronized late MC firing"
 
     def __init__(self):
-        self.gap_juction_gmax["MC"] = 0
+        self.gap_junction_gmax["MC"] = 0
 
 
 class GammaSignature_EqualTCMCInputs(GammaSignature):
@@ -198,7 +201,7 @@ class NMDA_block(GammaSignature):
     description = "Inhibiting NMDA synapses by setting conductance to 0"
 
     def __init__(self):
-        self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0
+        self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0  # disable NMDA
 
 
 class GammaSignature_SetupFifty(GammaSignature):
@@ -206,28 +209,38 @@ class GammaSignature_SetupFifty(GammaSignature):
 
 
 class GABA_TauOne(GammaSignature):
-	def __init__(self):
-		self.synapse_properties['GabaSyn']['tau1'] = 1  # default = 1
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties['GabaSyn']['tau1'] = 1  # default = 1
 
 
 class GABA_TauTwo(GammaSignature):
-	def __init__(self):
-		self.synapse_properties['GabaSyn']['tau2'] = 36  # default = 36
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties['GabaSyn']['tau2'] = 80  # default = 36
 
 
 class GABA_TauOneTwo(GammaSignature):
-	def __init__(self):
-		self.synapse_properties['GabaSyn']['tau1'] = 1  # default = 1
-		self.synapse_properties['GabaSyn']['tau2'] = 36  # default = 36
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties['GabaSyn']['tau1'] = 1.5  # default = 1
+        self.synapse_properties['GabaSyn']['tau2'] = 40  # default = 36
 
 
 class InhSynStrength(GammaSignature):
-	tc_input_weight = 0.8  # default = 0.8
-	mc_input_weight = 0.2  # default = 0.2
+    sim_setup_time = 50  # ms
+	
+    tc_input_weight = 0.8  # default = 0.8
+    mc_input_weight = 0.2  # default = 0.2
         
 
 class ElecSynStrength(GammaSignature):
-	gap_junction_gmax = {
+    sim_setup_time = 50  # ms
+	
+    gap_junction_gmax = {
 		"MC": 32,  # default = 32
 		"TC": 32   # default = 32
 	}
