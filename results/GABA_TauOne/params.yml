@@ -1,4 +1,4 @@
-gaba_tau1: 8
+gaba_tau1: 12
 gaba_tau2: 36
 mc_gap_junction_gmax: 32
 mc_input_weight: 0.2

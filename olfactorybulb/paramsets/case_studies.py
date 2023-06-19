@@ -212,22 +212,22 @@ class GABA_TauOne(GammaSignature):
     sim_setup_time = 50  # ms
 
     def __init__(self):
-        self.synapse_properties['GabaSyn']['tau1'] = 1  # default = 1
+        self.synapse_properties['GabaSyn']['tau1'] = 12  # default = 1
 
 
 class GABA_TauTwo(GammaSignature):
     sim_setup_time = 50  # ms
 
     def __init__(self):
-        self.synapse_properties['GabaSyn']['tau2'] = 80  # default = 36
+        self.synapse_properties['GabaSyn']['tau2'] = 200  # default = 36
 
 
 class GABA_TauOneTwo(GammaSignature):
     sim_setup_time = 50  # ms
 
     def __init__(self):
-        self.synapse_properties['GabaSyn']['tau1'] = 1.5  # default = 1
-        self.synapse_properties['GabaSyn']['tau2'] = 40  # default = 36
+        self.synapse_properties['GabaSyn']['tau1'] = 12  # default = 1
+        self.synapse_properties['GabaSyn']['tau2'] = 200  # default = 36
 
 
 class InhSynStrength(GammaSignature):
@@ -241,6 +241,6 @@ class ElecSynStrength(GammaSignature):
     sim_setup_time = 50  # ms
 	
     gap_junction_gmax = {
-		"MC": 32,  # default = 32
-		"TC": 32   # default = 32
+		"MC": 102,  # default = 32
+		"TC": 102   # default = 32
 	}

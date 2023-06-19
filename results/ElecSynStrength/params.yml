@@ -1,0 +1,9 @@
+gaba_tau1: 1
+gaba_tau2: 36
+mc_gap_junction_gmax: 102
+mc_input_weight: 0.2
+nmda_toggle: 1
+rel_conc_scale: 1
+setup_time: 50
+tc_gap_junction_gmax: 102
+tc_input_weight: 0.8

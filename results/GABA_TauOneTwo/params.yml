@@ -1,5 +1,5 @@
-gaba_tau1: 1.5
-gaba_tau2: 40
+gaba_tau1: 12
+gaba_tau2: 200
 mc_gap_junction_gmax: 32
 mc_input_weight: 0.2
 nmda_toggle: 1
