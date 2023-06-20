@@ -133,7 +133,8 @@ class OlfactoryBulb:
                            'tc_input_weight': params.tc_input_weight,
                            'mc_gap_junction_gmax': params.gap_junction_gmax['MC'],
                            'tc_gap_junction_gmax': params.gap_junction_gmax['TC'],
-                           'nmda_toggle': params.synapse_properties['AmpaNmdaSyn']['nmdatoggle']}
+                           'nmda_toggle': params.synapse_properties['AmpaNmdaSyn']['nmdatoggle'],
+                           'gaba_gmax': params.synapse_properties['GabaSyn']['gmax']}
             with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
                 yaml.dump(params_dict, outfile, default_flow_style=False)
 

@@ -204,8 +204,8 @@ class NMDA_block(GammaSignature):
         self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0  # disable NMDA
 
 
-class GammaSignature_SetupFifty(GammaSignature):
-    sim_setup_time = 50  # ms
+class GammaSignature_SetupTime(GammaSignature):
+    sim_setup_time = 75  # ms
 
 
 class GABA_TauOne(GammaSignature):
@@ -232,15 +232,15 @@ class GABA_TauOneTwo(GammaSignature):
 
 class InhSynStrength(GammaSignature):
     sim_setup_time = 50  # ms
-	
-    tc_input_weight = 0.8  # default = 0.8
-    mc_input_weight = 0.2  # default = 0.2
+
+    def __init__(self):
+        self.synapse_properties['GabaSyn']['gmax'] = 50  # default = 0.003 uS
         
 
 class ElecSynStrength(GammaSignature):
     sim_setup_time = 50  # ms
 	
     gap_junction_gmax = {
-		"MC": 32,  # default = 32
-		"TC": 32   # default = 32
+		"MC": 8,  # default = 32
+		"TC": 8   # default = 32
 	}
