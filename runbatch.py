@@ -12,11 +12,12 @@ delays = ['Twelve', 'Twenty', 'Fifty']
 
 paramsets = [
     # "GammaSignature",
-    "GammaSignature_SetupTime"
+    # "GammaSignature_SetupTime"
     # "GABA_TauOne",
     # "GABA_TauTwo",
     # "InhSynStrength",
-    # "ElecSynStrength"
+    # "ElecSynStrength",
+    "InputStrength"
     #"GammaSignature_NoInhibition",
     #"GammaSignature_NoTCGJs",
     #"GammaSignature_NoMCGJs",

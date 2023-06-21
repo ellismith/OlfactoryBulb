@@ -234,13 +234,19 @@ class InhSynStrength(GammaSignature):
     sim_setup_time = 50  # ms
 
     def __init__(self):
-        self.synapse_properties['GabaSyn']['gmax'] = 50  # default = 0.003 uS
+        self.synapse_properties['GabaSyn']['gmax'] = 50  # default = 2 uS
         
 
 class ElecSynStrength(GammaSignature):
     sim_setup_time = 50  # ms
 	
     gap_junction_gmax = {
-		"MC": 8,  # default = 32
-		"TC": 8   # default = 32
+		"MC": 0,  # default = 32
+		"TC": 0   # default = 32
 	}
+
+class InputStrength(GammaSignature):
+    sim_setup_time = 50  # ms
+
+    tc_input_weight = 0.4  # default = 0.8
+    mc_input_weight = 0.4  # default = 0.2
