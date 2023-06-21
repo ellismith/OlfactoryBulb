@@ -205,7 +205,7 @@ class NMDA_block(GammaSignature):
 
 
 class GammaSignature_SetupTime(GammaSignature):
-    sim_setup_time = 75  # ms
+    sim_setup_time = 50  # ms
 
 
 class GABA_TauOne(GammaSignature):
@@ -250,3 +250,9 @@ class InputStrength(GammaSignature):
 
     tc_input_weight = 0.4  # default = 0.8
     mc_input_weight = 0.4  # default = 0.2
+
+class NoInput(GammaSignature):
+    sim_setup_time = 50  # ms
+
+    tc_input_weight = 0
+    mc_input_weight = 0
