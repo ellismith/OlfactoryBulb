@@ -245,14 +245,75 @@ class ElecSynStrength(GammaSignature):
 		"TC": 0   # default = 32
 	}
 
+
 class InputStrength(GammaSignature):
     sim_setup_time = 50  # ms
 
     tc_input_weight = 0.4  # default = 0.8
     mc_input_weight = 0.4  # default = 0.2
 
+
 class NoInput(GammaSignature):
     sim_setup_time = 50  # ms
 
     tc_input_weight = 0
     mc_input_weight = 0
+
+
+class UnconnectedNetwork(GammaSignature):
+	sim_setup_time = 50 # ms
+
+	gap_junction_gmax = {
+		"MC": 0,
+		"TC": 0
+	}
+
+	def __init__(self):
+		self.synapse_properties['GabaSyn']['gmax'] = 0
+		self.synapse_properties['AmpaNmdaSyn']['gmax'] = 0
+
+
+class OnlyElecSyn(GammaSignature):
+	sim_setup_time = 50 # ms
+
+	def __init__(self):
+		self.synapse_properties['GabaSyn']['gmax'] = 0
+		self.synapse_properties['AmpaNmdaSyn']['gmax'] = 0
+
+
+class OnlyInhSyn(GammaSignature):
+	sim_setup_time = 50 # ms
+
+	gap_junction_gmax = {
+		"MC": 0,
+		"TC": 0
+	}
+
+	def __init__(self):
+		self.synapse_properties['AmpaNmdaSyn']['gmax'] = 0
+
+
+class OnlyExcSyn(GammaSignature):
+	sim_setup_time = 50 # ms
+
+	gap_junction_gmax = {
+		"MC": 0,
+		"TC": 0
+	}
+
+	def __init__(self):
+		self.synapse_properties['GabaSyn']['gmax'] = 0
+
+
+class MaxFiringRate(GammaSignature):
+    sim_setup_time = 50  # ms
+
+    max_firing_rate = 150
+
+
+class NoExcPlasticity(GammaSignature):
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties['AmpaNmdaSyn']['ltpinvl'] = -1
+        self.synapse_properties['AmpaNmdaSyn']['ltdinvl'] = -1

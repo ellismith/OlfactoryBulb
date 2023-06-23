@@ -115,6 +115,18 @@ class OlfactoryBulb:
             h.newPlotI()
             [g for g in h.Graph][-1].addvar('LfpElectrode[0].value')
 
+        # all_v_vecs = self.pc.py_gather(self.v_vectors, 0)
+
+        # if all_v_vecs is not None:
+        #     t = self.t_vec.to_python()
+        #     result = []
+        #     for rank_v_vecs in all_v_vecs:
+        #         for cell, v_vec in rank_v_vecs.items():
+        #             if 'MC' in cell:
+        #                 print(cell)
+        #             elif 'TC' in cell:
+        #                 print(cell)
+
         if autorun:
             self.run(params.tstop)
 
@@ -134,7 +146,10 @@ class OlfactoryBulb:
                            'mc_gap_junction_gmax': params.gap_junction_gmax['MC'],
                            'tc_gap_junction_gmax': params.gap_junction_gmax['TC'],
                            'nmda_toggle': params.synapse_properties['AmpaNmdaSyn']['nmdatoggle'],
-                           'gaba_gmax': params.synapse_properties['GabaSyn']['gmax']}
+                           'gaba_gmax': params.synapse_properties['GabaSyn']['gmax'],
+                           'ltpinvl': params.synapse_properties['AmpaNmdaSyn']['ltpinvl'],
+                           'ltdinvl': params.synapse_properties['AmpaNmdaSyn']['ltdinvl'],
+                           'ampa_nmda_gmax': params.synapse_properties['AmpaNmdaSyn']['gmax']}
             with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
                 yaml.dump(params_dict, outfile, default_flow_style=False)
 
@@ -612,6 +627,10 @@ class OlfactoryBulb:
             result = []
             for rank_v_vecs in all_v_vecs:
                 for cell, v_vec in rank_v_vecs.items():
+                    # if 'MC' in cell:
+                    #     print(cell)
+                    # elif 'TC' in cell:
+                    #     print(cell)
                     result.append((cell, t, v_vec.to_python()))
 
             with open(os.path.join(self.results_dir, 'soma_vs.pkl'), 'wb') as f:

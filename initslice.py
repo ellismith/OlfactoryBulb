@@ -5,12 +5,14 @@ mpiexec -np 16 python initslice.py -paramset GammaSignature -mpi
 
 Will run the network model using 16 cores using the olfactorybulb.paramsets.GammaSignature parameters
 """
-
+import os
 import sys
 if '-mpi' in sys.argv:
     from mpi4py import MPI
 
 from olfactorybulb.model import OlfactoryBulb as OB
+
+# os.chdir('OlfactoryBulb')
 
 if '-paramset' in sys.argv:
     paramset = sys.argv[sys.argv.index("-paramset")+1]
