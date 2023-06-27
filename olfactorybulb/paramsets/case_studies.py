@@ -235,6 +235,13 @@ class InhSynStrength(GammaSignature):
 
     def __init__(self):
         self.synapse_properties['GabaSyn']['gmax'] = 50  # default = 2 uS
+
+
+class ExcSynStrength(GammaSignature):
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties['AmpaNmdaSyn']['gmax'] = 30  # default = 64 uS
         
 
 class ElecSynStrength(GammaSignature):
@@ -244,6 +251,18 @@ class ElecSynStrength(GammaSignature):
 		"MC": 0,  # default = 32
 		"TC": 0   # default = 32
 	}
+
+
+class ExcAndElecSynStrength(GammaSignature):
+    sim_setup_time = 50  # ms
+
+    gap_junction_gmax = {
+		"MC": 24,  # default = 32
+		"TC": 24   # default = 32
+	}
+
+    def __init__(self):
+         self.synapse_properties['AmpaNmdaSyn']['gmax'] = 74  # default = 64 uS
 
 
 class InputStrength(GammaSignature):

@@ -23,6 +23,9 @@ from olfactorybulb.paramsets.case_studies import *
 from olfactorybulb.paramsets.sensitivity import *
 
 
+debug_cells = True
+
+
 class OlfactoryBulb:
     """
     The main class used to build and simulate the olfactory bulb network model.
@@ -66,8 +69,22 @@ class OlfactoryBulb:
         self.v_vectors = {}
         self.input_vectors = []
 
+        # print('here!')
+
         for cell_type in ['MC', 'GC', 'TC']:
             self.load_cells(cell_type)
+
+        # print cells
+        if debug_cells:
+            print('line 74')
+            i = 0
+            for cell_type, cells in self.cells.items():
+                if cell_type in ['MC', 'TC']:
+                    for cell in cells:
+                        print(cell.cell)
+                        i += 1
+            print(f'm/t cell count = {i}')
+            print('\n')
 
         if self.mpirank == 0:
             complexities = np.array([c[0] for c in self.rank_complexities])
@@ -80,12 +97,36 @@ class OlfactoryBulb:
         for synapse_set in ['GCs__MCs', 'GCs__TCs']:
             self.load_synapse_set(synapse_set)
 
+        # print cells
+        # print('line 92')
+        # for cell_type, cells in self.cells.items():
+        #     if cell_type in ['MC', 'TC']:
+        #         for cell in cells:
+        #             print(cell.cell)
+        # print('\n')
+
         # Load glom->cell links
         self.load_glom_cells()
+
+        # print cells
+        # print('line 103')
+        # for cell_type, cells in self.cells.items():
+        #     if cell_type in ['MC', 'TC']:
+        #         for cell in cells:
+        #             print(cell.cell)
+        # print('\n')
 
         # Create gap junctions between MC and TC tufts
         for cell_type, g_gap in params.gap_junction_gmax.items():
             self.add_gap_junctions(cell_type, g_gap)
+
+        # print cells
+        # print('line 115')
+        # for cell_type, cells in self.cells.items():
+        #     if cell_type in ['MC', 'TC']:
+        #         for cell in cells:
+        #             print(cell.cell)
+        # print('\n')
 
         # Set synapse parameters
         for syn_mech, syn_values in params.synapse_properties.items():
@@ -93,11 +134,27 @@ class OlfactoryBulb:
                 for syn_attrib, attrib_value in syn_values.items():
                     [setattr(s, syn_attrib, attrib_value) for s in getattr(h, syn_mech)]
 
+        # print cells
+        # print('line 129')
+        # for cell_type, cells in self.cells.items():
+        #     if cell_type in ['MC', 'TC']:
+        #         for cell in cells:
+        #             print(cell.cell)
+        # print('\n')
+
         # Add glomerular inputs
         for time, odor_info in params.input_odors.items():
             # Method 1
             time += params.sim_setup_time
             self.add_inputs(odor=odor_info["name"], t=time, rel_conc=odor_info["rel_conc"])
+
+        # print cells
+        # print('line 143')
+        # for cell_type, cells in self.cells.items():
+        #     if cell_type in ['MC', 'TC']:
+        #         for cell in cells:
+        #             print(cell.cell)
+        # print('\n')
 
         # LFP
         self.electrode = self.create_lfp_electrode(*params.lfp_electrode_location,
@@ -107,6 +164,14 @@ class OlfactoryBulb:
 
         for cell_type in params.record_from_somas:
             self.record_from_somas(cell_type)
+
+        # print cells
+        # print('line 160')
+        # for cell_type, cells in self.cells.items():
+        #     if cell_type in ['MC', 'TC']:
+        #         for cell in cells:
+        #             print(cell.cell)
+        # print('\n')
 
         if self.mpirank == 0 and self.nranks == 1:
             from neuron import gui
@@ -127,8 +192,24 @@ class OlfactoryBulb:
         #             elif 'TC' in cell:
         #                 print(cell)
 
+        # print cells
+        # print('line 187')
+        # for cell_type, cells in self.cells.items():
+        #     if cell_type in ['MC', 'TC']:
+        #         for cell in cells:
+        #             print(cell.cell)
+        # print('\n')
+
         if autorun:
             self.run(params.tstop)
+
+            # print cells
+            # print('line 198')
+            # for cell_type, cells in self.cells.items():
+            #     if cell_type in ['MC', 'TC']:
+            #         for cell in cells:
+            #             print(cell.cell)
+            # print('\n')
 
             if self.mpirank == 0:
                 self.results_dir = os.path.join('results', params.name)
@@ -136,6 +217,14 @@ class OlfactoryBulb:
                     os.makedirs(self.results_dir)
 
             self.save_recorded_vectors()
+
+            # print cells
+            # print('line 213')
+            # for cell_type, cells in self.cells.items():
+            #     if cell_type in ['MC', 'TC']:
+            #         for cell in cells:
+            #             print(cell.cell)
+            # print('\n')
 
             params_dict = {'setup_time': params.sim_setup_time,
                            'rel_conc_scale': params.rel_conc_scale,
@@ -550,6 +639,8 @@ class OlfactoryBulb:
         :param cell_type: One of 'MC', 'GC', 'TC'
         """
 
+        print('loading cells')
+
         # Load the cell json file
         path = os.path.join(self.slice_dir, cell_type + 's.json')
 
@@ -590,6 +681,9 @@ class OlfactoryBulb:
         for cell_model_name, count in rank_cell_counts[self.mpirank].items():
             cell_models = [eval(cell_model_name + '()') for _ in range(count)]
             self.cells[cell_type].extend(cell_models)
+            if cell_type in ['MC', 'TC']:
+                for cell in cell_models:
+                    print(cell.cell)
 
         # Update section index with the new cells
         self.bn_server.update_section_index()
@@ -674,5 +768,28 @@ class OlfactoryBulb:
 
         with open(path, 'r') as f:
             synapse_set_dict = json.load(f)
+
+        sources = {}
+        dests = {}
+
+        entries = synapse_set_dict['entries']
+        for entry in entries:
+            source = entry['source_section'].split('.')[0]
+            dest = entry['dest_section'].split('.')[0]
+            
+            if source not in sources.keys():
+                sources[source] = 0
+            else:
+                sources[source] += 1
+
+            if dest not in dests.keys():
+                dests[dest] = 0
+            else:
+                dests[dest] += 1
+
+        print(synapse_set)
+        print(f'    Destinations = {json.dumps(dests, indent=4)}')
+        # print(f'    Sources = {json.dumps(sources, indent=4)}')
+        # print()
 
         self.bn_server.create_synapses(synapse_set_dict)

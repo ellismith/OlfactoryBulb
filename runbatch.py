@@ -11,8 +11,10 @@ print(os.getcwd())
 delays = ['Twelve', 'Twenty', 'Fifty']
 
 paramsets = [
-    "GammaSignature"
+    # "GammaSignature"
     # "GammaSignature_SetupTime"
+    # "ExcSynStrength"
+    "ExcAndElecSynStrength"
     # "NoInput",
     # "NoExcPlasticity"
     # "UnconnectedNetwork",
