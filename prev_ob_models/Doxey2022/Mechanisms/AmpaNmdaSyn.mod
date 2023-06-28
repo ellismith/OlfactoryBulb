@@ -1,3 +1,5 @@
+: Disable plasticity by setting ltpinvl, ltdinvl = -1
+
 TITLE simple NMDA receptors
 
 : From Migliore 2013 ampanmda.mod
@@ -57,7 +59,7 @@ ENDCOMMENT
 NEURON {
 	POINT_PROCESS AmpaNmdaSyn
 	RANGE R, g, mg, inmda, iampa, gnmda, gampa
-	RANGE x, mgid, ggid, srcgid, gmax, ltdinvl, ltpinvl, nmdafactor
+	RANGE x, mgid, ggid, srcgid, gmax, ltdinvl, ltpinvl, nmdafactor, nmdatoggle
 	NONSPECIFIC_CURRENT i
 	GLOBAL Cdur, Alpha, Beta, E, Rinf, Rtau, ampatau
 	GLOBAL gampafactor

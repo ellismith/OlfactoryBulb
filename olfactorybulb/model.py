@@ -238,7 +238,8 @@ class OlfactoryBulb:
                            'gaba_gmax': params.synapse_properties['GabaSyn']['gmax'],
                            'ltpinvl': params.synapse_properties['AmpaNmdaSyn']['ltpinvl'],
                            'ltdinvl': params.synapse_properties['AmpaNmdaSyn']['ltdinvl'],
-                           'ampa_nmda_gmax': params.synapse_properties['AmpaNmdaSyn']['gmax']}
+                           'ampa_nmda_gmax': params.synapse_properties['AmpaNmdaSyn']['gmax'],
+                           'max_firing_rate': params.max_firing_rate}
             with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
                 yaml.dump(params_dict, outfile, default_flow_style=False)
 
@@ -460,6 +461,7 @@ class OlfactoryBulb:
         :param in_name: A part of a cell class name (e.g. 'Mitral') used to select a cell to which the GJ is added
         :param g_gap: The conductance of the gap junctions
         """
+        print(f'4. adding gap junctions for {in_name}')
 
         model_inputsegs = self.get_model_inputsegs()
 
@@ -565,6 +567,8 @@ class OlfactoryBulb:
         :param rel_conc: Relative concentration 0-1
         """
 
+        print(f'5. adding inputs')
+
         model_inputsegs = self.get_model_inputsegs()
 
         # Get input odor glomeruli
@@ -603,6 +607,8 @@ class OlfactoryBulb:
         Loads a dict that maps glomeruli ids to cells that are attached to each glomerulus
         """
 
+        print(f'3. loading glom cells')
+
         with open(os.path.join(self.slice_dir, 'glom_cells.json')) as f:
             self.glom_cells = json.load(f)
 
@@ -639,7 +645,7 @@ class OlfactoryBulb:
         :param cell_type: One of 'MC', 'GC', 'TC'
         """
 
-        print('loading cells')
+        print(f'1. loading cells for {cell_type}')
 
         # Load the cell json file
         path = os.path.join(self.slice_dir, cell_type + 's.json')
@@ -676,14 +682,15 @@ class OlfactoryBulb:
             count += 1
             rank_cell_counts[cell_rank][name] = count
 
+        print(f'HERE!! {rank_cell_counts}')
         # Load that many base instances of each model
         self.cells[cell_type] = []
         for cell_model_name, count in rank_cell_counts[self.mpirank].items():
             cell_models = [eval(cell_model_name + '()') for _ in range(count)]
             self.cells[cell_type].extend(cell_models)
-            if cell_type in ['MC', 'TC']:
-                for cell in cell_models:
-                    print(cell.cell)
+            # if cell_type in ['MC', 'TC']:
+            #     for cell in cell_models:
+            #         print(cell.cell)
 
         # Update section index with the new cells
         self.bn_server.update_section_index()
@@ -763,6 +770,8 @@ class OlfactoryBulb:
 
         :param synapse_set: One of 'GCs__MCs' or 'GCs__TCs' as seen in the olfactorybulb.slices.DorsalColumnSlice folder.
         """
+
+        print(f'2. loading synapse set for {synapse_set}')
 
         path = os.path.join(self.slice_dir, synapse_set + '.json')
 

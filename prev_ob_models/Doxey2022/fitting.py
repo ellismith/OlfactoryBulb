@@ -3,7 +3,9 @@ try:
 except:
     pass # python 3
 
-import multiprocessing
+# import multiprocessing
+import multiprocess
+from multiprocess import Pool, TimeoutError
 import random
 from time import time
 
@@ -17,9 +19,16 @@ from pandas import DataFrame
 
 from olfactorybulb.database import *
 from olfactorybulb.neuronunit.models.neuron_cell import NeuronCellModel
+from olfactorybulb.neuronunit.tests.tests import *
 
 SHOW_ERRORS = True
 FAST_EVAL = False
+
+def evaluate(cf, param_set):
+    cf.evaluate(param_set)
+
+def get_workitem_score(cf, item):
+    cf.get_workitem_score(item)
 
 class CellFitter(object):
     def __init__(self, cell_type, fitting_model_class=None):
@@ -250,11 +259,11 @@ class CellFitter(object):
 
     def get_workitem_scores(self):
 
-        processes = max(1, multiprocessing.cpu_count() - 1)
+        processes = max(1, multiprocess.cpu_count() - 1)
 
-        from multiprocess import Pool
+        # from multiprocess import Pool
         pool = Pool(processes=processes, maxtasksperchild=1)
-        scores = pool.map(self.get_workitem_score, self.work_items)
+        scores = pool.map(get_workitem_score, args=(self,self.work_items,))
         pool.close()
         pool.terminate()
 
@@ -294,12 +303,12 @@ class CellFitter(object):
 
     def get_fitnesses(self, pop, label):
         max_wait = round(2.5 * 60) # seconds
-        processes = max(1, multiprocessing.cpu_count() - 1)
+        processes = max(1, multiprocess.cpu_count() - 1)
 
-        from multiprocess import Pool, TimeoutError
+        # from multiprocess import Pool, TimeoutError
 
         pool = Pool(processes=processes, maxtasksperchild=1)
-        processes = [pool.apply_async(self.evaluate, (list(ind),)) for ind in pop]
+        processes = [pool.apply_async(evaluate, (self,list(ind))) for ind in pop]
 
         wait_until = time() + max_wait
 
@@ -319,10 +328,11 @@ class CellFitter(object):
                 if SHOW_ERRORS:
                     print('Simulation timed out')
 
-            except:
+            except Exception as e:
                 result = 9 * 10.999,
 
                 if SHOW_ERRORS:
+                    print(e)
                     print('Error in simulation')
 
             fitnesses.append(result)
@@ -398,7 +408,7 @@ class CellFitter(object):
                   "TOT NEW", len(offspring))
 
             # Clone the selected individuals
-            offspring = map(toolbox.clone, offspring)
+            offspring = list(map(toolbox.clone, offspring))
 
             # Apply crossover and mutation on the offspring
             for child1, child2 in zip(offspring[::2], offspring[1::2]):

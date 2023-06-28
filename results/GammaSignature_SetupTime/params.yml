@@ -1,6 +1,10 @@
+ampa_nmda_gmax: 64
 gaba_gmax: 2
 gaba_tau1: 1
 gaba_tau2: 36
+ltdinvl: 0
+ltpinvl: 0
+max_firing_rate: 150
 mc_gap_junction_gmax: 32
 mc_input_weight: 0.2
 nmda_toggle: 1
