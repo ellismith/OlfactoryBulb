@@ -199,6 +199,7 @@ class OneMsTest(GammaSignature):
 
 class NMDA_block(GammaSignature):  
     description = "Inhibiting NMDA synapses by setting conductance to 0"
+    sim_setup_time = 50  # ms
 
     def __init__(self):
         self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0  # disable NMDA
@@ -218,7 +219,49 @@ class GammaSignature_Testing(GammaSignature):
         self.synapse_properties['GabaSyn']['gmax'] = 3  # default = 2 uS
         self.synapse_properties['AmpaNmdaSyn']['gmax'] = 100  # default = 64 uS
 
+        self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0
+
+
+class GammaSignature_Modified(GammaSignature):
+    sim_setup_time = 50
+
+    max_firing_rate = 80  # default = 150
+
+    gap_junction_gmax = {
+		"MC": 5,  # default = 32
+		"TC": 5   # default = 32
+	}
+
+    def __init__(self):
+        self.synapse_properties['GabaSyn']['gmax'] = 3  # default = 2 uS
+        self.synapse_properties['AmpaNmdaSyn']['gmax'] = 100  # default = 64 uS
+
         self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 1
+
+
+class GammaSignature_ModifiedWithKetamine(GammaSignature):
+    sim_setup_time = 50
+
+    max_firing_rate = 80  # default = 150
+
+    gap_junction_gmax = {
+		"MC": 5,  # default = 32
+		"TC": 5   # default = 32
+	}
+
+    def __init__(self):
+        self.synapse_properties['GabaSyn']['gmax'] = 3  # default = 2 uS
+        self.synapse_properties['AmpaNmdaSyn']['gmax'] = 100  # default = 64 uS
+
+        self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0
+
+
+class ConditionalNmdaBlock(GammaSignature_Modified):
+	odors_for_block = [800, 1000, 1200]
+        
+
+class BackgroundInput(GammaSignature_Modified):
+     background_current = 0.5  # nA
 
 
 class GammaSignature_SetupTime(GammaSignature):

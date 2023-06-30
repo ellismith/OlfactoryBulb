@@ -20,6 +20,8 @@ class SilentNetwork:
 
     tstop = 800.1 + sim_setup_time  # ms
 
+    background_current = 0
+
     # GJs disabled
     gap_junction_gmax = {
         "MC": 0,
@@ -46,6 +48,8 @@ class SilentNetwork:
             'ltdinvl': 0
         }
     }
+
+    odors_for_block = []
 
     # Mild odor input spikes
     input_odors = {

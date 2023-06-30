@@ -12,8 +12,12 @@ delays = ['Twelve', 'Twenty', 'Fifty']
 
 paramsets = [
     # "GammaSignature"
-    "GammaSignature_SetupTime",
-    "GammaSignature_Testing"
+    # "GammaSignature_SetupTime",
+    # "GammaSignature_Testing"
+    # "GammaSignature_Modified"
+    # "GammaSignature_ModifiedWithKetamine"
+    # "ConditionalNmdaBlock"
+    "BackgroundInput"
     # "ExcSynStrength"
     # "ExcAndElecSynStrength"
     # "NoInput",

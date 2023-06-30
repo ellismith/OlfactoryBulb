@@ -69,22 +69,20 @@ class OlfactoryBulb:
         self.v_vectors = {}
         self.input_vectors = []
 
-        # print('here!')
-
         for cell_type in ['MC', 'GC', 'TC']:
             self.load_cells(cell_type)
 
         # print cells
-        if debug_cells:
-            print('line 74')
-            i = 0
-            for cell_type, cells in self.cells.items():
-                if cell_type in ['MC', 'TC']:
-                    for cell in cells:
-                        print(cell.cell)
-                        i += 1
-            print(f'm/t cell count = {i}')
-            print('\n')
+        # if debug_cells:
+        #     print('line 74')
+        #     i = 0
+        #     for cell_type, cells in self.cells.items():
+        #         if cell_type in ['MC', 'TC']:
+        #             for cell in cells:
+        #                 print(cell.cell)
+        #                 i += 1
+        #     print(f'm/t cell count = {i}')
+        #     print('\n')
 
         if self.mpirank == 0:
             complexities = np.array([c[0] for c in self.rank_complexities])
@@ -97,36 +95,12 @@ class OlfactoryBulb:
         for synapse_set in ['GCs__MCs', 'GCs__TCs']:
             self.load_synapse_set(synapse_set)
 
-        # print cells
-        # print('line 92')
-        # for cell_type, cells in self.cells.items():
-        #     if cell_type in ['MC', 'TC']:
-        #         for cell in cells:
-        #             print(cell.cell)
-        # print('\n')
-
         # Load glom->cell links
         self.load_glom_cells()
-
-        # print cells
-        # print('line 103')
-        # for cell_type, cells in self.cells.items():
-        #     if cell_type in ['MC', 'TC']:
-        #         for cell in cells:
-        #             print(cell.cell)
-        # print('\n')
 
         # Create gap junctions between MC and TC tufts
         for cell_type, g_gap in params.gap_junction_gmax.items():
             self.add_gap_junctions(cell_type, g_gap)
-
-        # print cells
-        # print('line 115')
-        # for cell_type, cells in self.cells.items():
-        #     if cell_type in ['MC', 'TC']:
-        #         for cell in cells:
-        #             print(cell.cell)
-        # print('\n')
 
         # Set synapse parameters
         for syn_mech, syn_values in params.synapse_properties.items():
@@ -134,44 +108,33 @@ class OlfactoryBulb:
                 for syn_attrib, attrib_value in syn_values.items():
                     [setattr(s, syn_attrib, attrib_value) for s in getattr(h, syn_mech)]
 
-        # print cells
-        # print('line 129')
-        # for cell_type, cells in self.cells.items():
-        #     if cell_type in ['MC', 'TC']:
-        #         for cell in cells:
-        #             print(cell.cell)
-        # print('\n')
-
+       
         # Add glomerular inputs
         for time, odor_info in params.input_odors.items():
             # Method 1
             time += params.sim_setup_time
             self.add_inputs(odor=odor_info["name"], t=time, rel_conc=odor_info["rel_conc"])
 
-        # print cells
-        # print('line 143')
-        # for cell_type, cells in self.cells.items():
-        #     if cell_type in ['MC', 'TC']:
-        #         for cell in cells:
-        #             print(cell.cell)
-        # print('\n')
+            # TODO: add conditional nmda block
+            # if time in params.odors_for_block:
+            #     params.synapse_properties['AmpaNmdaSyn']['nmdatoggle'] = 0
+            # else:
+            #     params.synapse_properties['AmpaNmdaSyn']['nmdatoggle'] = 1
 
+        
         # LFP
         self.electrode = self.create_lfp_electrode(*params.lfp_electrode_location,
                                                    sampling_period=params.recording_period)
 
         self.setup_status_reporter()
 
+        # TODO: add background input here
+        for cell_type, cells in self.cells.items():
+            self.add_background_input(cells)
+
         for cell_type in params.record_from_somas:
             self.record_from_somas(cell_type)
 
-        # print cells
-        # print('line 160')
-        # for cell_type, cells in self.cells.items():
-        #     if cell_type in ['MC', 'TC']:
-        #         for cell in cells:
-        #             print(cell.cell)
-        # print('\n')
 
         if self.mpirank == 0 and self.nranks == 1:
             from neuron import gui
@@ -180,37 +143,11 @@ class OlfactoryBulb:
             h.newPlotI()
             [g for g in h.Graph][-1].addvar('LfpElectrode[0].value')
 
-        # all_v_vecs = self.pc.py_gather(self.v_vectors, 0)
-
-        # if all_v_vecs is not None:
-        #     t = self.t_vec.to_python()
-        #     result = []
-        #     for rank_v_vecs in all_v_vecs:
-        #         for cell, v_vec in rank_v_vecs.items():
-        #             if 'MC' in cell:
-        #                 print(cell)
-        #             elif 'TC' in cell:
-        #                 print(cell)
-
-        # print cells
-        # print('line 187')
-        # for cell_type, cells in self.cells.items():
-        #     if cell_type in ['MC', 'TC']:
-        #         for cell in cells:
-        #             print(cell.cell)
-        # print('\n')
 
         if autorun:
             self.run(params.tstop)
 
-            # print cells
-            # print('line 198')
-            # for cell_type, cells in self.cells.items():
-            #     if cell_type in ['MC', 'TC']:
-            #         for cell in cells:
-            #             print(cell.cell)
-            # print('\n')
-
+            
             if self.mpirank == 0:
                 self.results_dir = os.path.join('results', params.name)
                 if not os.path.exists(self.results_dir):
@@ -218,14 +155,7 @@ class OlfactoryBulb:
 
             self.save_recorded_vectors()
 
-            # print cells
-            # print('line 213')
-            # for cell_type, cells in self.cells.items():
-            #     if cell_type in ['MC', 'TC']:
-            #         for cell in cells:
-            #             print(cell.cell)
-            # print('\n')
-
+        
             params_dict = {'setup_time': params.sim_setup_time,
                            'rel_conc_scale': params.rel_conc_scale,
                            'gaba_tau1': params.synapse_properties['GabaSyn']['tau1'],
@@ -239,7 +169,9 @@ class OlfactoryBulb:
                            'ltpinvl': params.synapse_properties['AmpaNmdaSyn']['ltpinvl'],
                            'ltdinvl': params.synapse_properties['AmpaNmdaSyn']['ltdinvl'],
                            'ampa_nmda_gmax': params.synapse_properties['AmpaNmdaSyn']['gmax'],
-                           'max_firing_rate': params.max_firing_rate}
+                           'max_firing_rate': params.max_firing_rate,
+                           'background_current': params.background_current}
+            
             with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
                 yaml.dump(params_dict, outfile, default_flow_style=False)
 
@@ -699,6 +631,22 @@ class OlfactoryBulb:
         self.bn_server.init_mpi(self.pc, self.mpimap)
         self.bn_server.update_groups([group_dict])
 
+    def add_background_input(self, cells):
+        """
+        Adds a small injected current to the soma of all cells for the duration of simulation
+
+        :param cell_type: One of 'MC', 'GC', 'TC'
+        """
+
+        h = self.h
+
+        for cell in cells:
+            # print(f'injecting current to {cell.cell}')
+            stim = h.IClamp(0.5, sec=cell.soma)
+            stim.delay = self.params.sim_setup_time
+            stim.dur = self.params.tstop - self.params.sim_setup_time
+            stim.amp = self.params.background_current
+
     def record_from_somas(self, cell_type):
         """
         Adds NEURON vector recorders to the somas of the specified cell types
@@ -796,8 +744,8 @@ class OlfactoryBulb:
             else:
                 dests[dest] += 1
 
-        print(synapse_set)
-        print(f'    Destinations = {json.dumps(dests, indent=4)}')
+        # print(synapse_set)
+        # print(f'    Destinations = {json.dumps(dests, indent=4)}')
         # print(f'    Sources = {json.dumps(sources, indent=4)}')
         # print()
 
