@@ -1,30 +1,53 @@
-Destination:
-  GC1: 0
-  GC2: 0
-  GC3: 0
-  GC4: 0
-  GC5: 0
+GC1:
   MC1: 0
   MC2: 0
   MC3: 0
-  MC4: 1
-  MC5: 1
+  MC4: 187
+  MC5: 348
   TC1: 0
   TC2: 0
   TC3: 0
   TC4: 0
   TC5: 0
-Source:
-  GC1: 535
-  GC2: 35
-  GC3: 1254
-  GC4: 215
-  GC5: 199
+GC2:
   MC1: 0
   MC2: 0
   MC3: 0
-  MC4: 0
-  MC5: 0
+  MC4: 9
+  MC5: 26
+  TC1: 0
+  TC2: 0
+  TC3: 0
+  TC4: 0
+  TC5: 0
+GC3:
+  MC1: 0
+  MC2: 0
+  MC3: 0
+  MC4: 267
+  MC5: 987
+  TC1: 0
+  TC2: 0
+  TC3: 0
+  TC4: 0
+  TC5: 0
+GC4:
+  MC1: 0
+  MC2: 0
+  MC3: 0
+  MC4: 45
+  MC5: 170
+  TC1: 0
+  TC2: 0
+  TC3: 0
+  TC4: 0
+  TC5: 0
+GC5:
+  MC1: 0
+  MC2: 0
+  MC3: 0
+  MC4: 53
+  MC5: 146
   TC1: 0
   TC2: 0
   TC3: 0
