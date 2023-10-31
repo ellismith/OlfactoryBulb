@@ -67,22 +67,23 @@ class OlfactoryBulb:
         self.t_vec = h.Vector()
         self.t_vec.record(h._ref_t, params.recording_period)
         self.v_vectors = {}
+        self.spike_vectors = {}
         self.input_vectors = []
 
         for cell_type in ['MC', 'GC', 'TC']:
             self.load_cells(cell_type)
 
         # print cells
-        # if debug_cells:
-        #     print('line 74')
-        #     i = 0
-        #     for cell_type, cells in self.cells.items():
-        #         if cell_type in ['MC', 'TC']:
-        #             for cell in cells:
-        #                 print(cell.cell)
-        #                 i += 1
-        #     print(f'm/t cell count = {i}')
-        #     print('\n')
+        if debug_cells:
+             print('line 74')
+             i = 0
+             for cell_type, cells in self.cells.items():
+                 if cell_type in ['MC', 'TC']:
+                     for cell in cells:
+                         print(cell.cell)
+                         i += 1
+             print(f'm/t cell count = {i}')
+             print('\n')
 
         if self.mpirank == 0:
             complexities = np.array([c[0] for c in self.rank_complexities])
@@ -661,6 +662,15 @@ class OlfactoryBulb:
             v_vec.record(cell_model.soma(0.5)._ref_v, self.params.recording_period)
             self.v_vectors[str(cell_model.soma)] = v_vec
 
+            # use NetCon to record spikes from voltage traces passing threshold = 0mV
+            # when source ref v passes threshold time t-delay, target receives event at time t
+            spike_vec = h.Vector()
+            nc = h.NetCon(cell_model.soma(0.5)._ref_v, None, sec=cell_model.soma)
+            nc.threshold = 0
+            nc.record(spike_vec)
+            self.spike_vectors[str(cell_model.soma)] = spike_vec
+
+
     def save_recorded_vectors(self):
         """
         Saves soma voltage traces and odor input spike times to Pickle files for later processing
@@ -670,6 +680,7 @@ class OlfactoryBulb:
 
         # Gather cell voltage vectors
         all_v_vecs = self.pc.py_gather(self.v_vectors, 0)
+        all_spike_vecs = self.pc.py_gather(self.spike_vectors, 0)
 
         if all_v_vecs is not None:
             t = self.t_vec.to_python()
@@ -684,6 +695,20 @@ class OlfactoryBulb:
 
             with open(os.path.join(self.results_dir, 'soma_vs.pkl'), 'wb') as f:
                 cPickle.dump(result, f)
+
+        if all_spike_vecs is not None:
+            #t = self.t_vec.to_python()
+            spike_times = []
+            for rank_spike_vecs in all_spike_vecs:
+                for cell, spike_vec in rank_spike_vecs.items():
+                    # if 'MC' in cell:
+                    #     print(cell)
+                    # elif 'TC' in cell:
+                    #     print(cell)
+                    spike_times.append((cell, spike_vec.to_python()))
+
+            with open(os.path.join(self.results_dir, 'spike_times.pkl'), 'wb') as f:
+                cPickle.dump(spike_times, f)
 
         # Gather input event time vectors
         all_input_vecs = self.pc.py_gather(self.input_vectors, 0)
