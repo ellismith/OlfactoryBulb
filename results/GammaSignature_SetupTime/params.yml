@@ -1,4 +1,5 @@
 ampa_nmda_gmax: 64
+background_current: 0
 gaba_gmax: 2
 gaba_tau1: 1
 gaba_tau2: 36
