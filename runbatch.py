@@ -11,13 +11,17 @@ print(os.getcwd())
 delays = ['Twelve', 'Twenty', 'Fifty']
 
 paramsets = [
-    # "GammaSignature"
+    #"GammaSignature",
+    "GammaSignature_SetupTime",
+    # "GammaSignature_DifferentOdor",
+    #"GammaSignature_AppleMint",
+    #"GammaSignature_AppleBanana"
     # "GammaSignature_SetupTime",
     # "GammaSignature_Testing"
     # "GammaSignature_Modified"
     # "GammaSignature_ModifiedWithKetamine"
     # "ConditionalNmdaBlock"
-    "BackgroundInput"
+    # "BackgroundInput"
     # "ExcSynStrength"
     # "ExcAndElecSynStrength"
     # "NoInput",
@@ -35,7 +39,7 @@ paramsets = [
     #"GammaSignature_NoTCGJs",
     #"GammaSignature_NoMCGJs",
     #"GammaSignature_EqualTCMCInputs",
-    # "NMDA_block"
+    "NMDA_block"
 ]
 
 # Always run at least two processes (NEURON seg faults with <2)
