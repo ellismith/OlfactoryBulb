@@ -4,6 +4,7 @@ sciunit
 neuronunit
 LFPsimpy==0.1.1
 nbconvert
+seaborn
 #git+http://github.com/scidash/sciunit@4b1915afdc4eedd030982b81486a0344e6ed3985#egg=sciunit
 #git+http://github.com/scidash/neuronunit@b668559ee273c8836a24f2f47fc72dcfbe393234#egg=neuronunit
 
