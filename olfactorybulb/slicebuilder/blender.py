@@ -80,7 +80,7 @@ class SliceBuilderBlender:
         return os.path.join(slice_dir, self.slice_name)
 
     def __init__(self,
-                 odors=['Apple'],
+                 odors=['Apple', 'Mint'],
                  slice_object_name='DorsalColumnSlice',
                  max_mcs=10, max_tcs=None, max_gcs=300,  # Uses mouse ratios if None
                  mc_particles_object_name='2 ML Particles',
