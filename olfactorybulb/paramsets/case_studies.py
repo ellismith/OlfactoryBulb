@@ -191,6 +191,36 @@ class GammaSignature_DifferentOdorConc(GammaSignature):
         1800: {"name": "Apple", "rel_conc": 0.45},
     }
 
+class GammaSignature_AppleMint(GammaSignature):
+
+    input_odors = {
+        0:   {"name": "Apple", "rel_conc": 0.1},
+        200: {"name": "Apple", "rel_conc": 0.05},
+        400: {"name": "Apple", "rel_conc": 0.1},
+        600: {"name": "Apple", "rel_conc": 0.15},
+        800: {"name": "Mint", "rel_conc": 0.20},
+        1000: {"name": "Mint", "rel_conc": 0.25},
+        1200: {"name": "Mint", "rel_conc": 0.30},
+        1400: {"name": "Mint", "rel_conc": 0.35},
+        1600: {"name": "Mint", "rel_conc": 0.4},
+        1800: {"name": "Mint", "rel_conc": 0.45},
+    }
+
+class GammaSignature_AppleBanana(GammaSignature):
+
+    input_odors = {
+        0:   {"name": "Apple", "rel_conc": 0.1},
+        200: {"name": "Apple", "rel_conc": 0.05},
+        400: {"name": "Apple", "rel_conc": 0.1},
+        600: {"name": "Apple", "rel_conc": 0.15},
+        800: {"name": "Banana", "rel_conc": 0.20},
+        1000: {"name": "Banana", "rel_conc": 0.25},
+        1200: {"name": "Banana", "rel_conc": 0.30},
+        1400: {"name": "Banana", "rel_conc": 0.35},
+        1600: {"name": "Banana", "rel_conc": 0.4},
+        1800: {"name": "Banana", "rel_conc": 0.45},
+    }
+
 
 class OneMsTest(GammaSignature):
     description = "Test of the simulation, for build testing only"
