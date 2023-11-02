@@ -235,6 +235,22 @@ class NMDA_block(GammaSignature):
         self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0  # disable NMDA
 
 
+class AMPA_block(GammaSignature):  
+    description = "Inhibiting AMPA synapses by setting conductance to 0"
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 0  # disable AMPA
+
+
+class AMPA_increase(GammaSignature):  
+    description = "Increasing AMPA synapse activity by increasing conductance"
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 2  # enhance AMPA activity
+
+
 class GammaSignature_Testing(GammaSignature):
     sim_setup_time = 50
 
