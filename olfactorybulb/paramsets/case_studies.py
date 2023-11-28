@@ -128,6 +128,10 @@ class GammaSignature(MC_TC_Combined_Base):
 
 # Experiments
 
+class GammaSignature_SetupTime(GammaSignature):
+    sim_setup_time = 50  # ms
+
+
 class GammaSignature_NoInhibition(GammaSignature):
 
     description = "Disabling inhibition should advance MC first spike times"
@@ -138,6 +142,7 @@ class GammaSignature_NoInhibition(GammaSignature):
 class GammaSignature_NoTCGJs(GammaSignature):
 
     description = "Disabling TC GJs should abolish synchronized early TC firing"
+    sim_setup_time = 50
 
     def __init__(self):
         self.gap_junction_gmax["TC"] = 0
@@ -146,7 +151,7 @@ class GammaSignature_NoTCGJs(GammaSignature):
 class GammaSignature_NoMCGJs(GammaSignature):
 
     description = "Disabling MC GJs should abolish synchronized late MC firing"
-
+    sim_setup_time = 50
     def __init__(self):
         self.gap_junction_gmax["MC"] = 0
 
@@ -248,24 +253,33 @@ class AMPA_increase(GammaSignature):
     sim_setup_time = 50  # ms
 
     def __init__(self):
-        self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 2  # enhance AMPA activity
+        self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 4  # enhance AMPA activity
+
+
+class NMDA_block_AMPA_increase(GammaSignature):  
+    description = "Increasing AMPA synapse activity by increasing conductance"
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0  # disable NMDA
+        self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 4  # enhance AMPA activity
 
 
 class GammaSignature_Testing(GammaSignature):
-    sim_setup_time = 50
+    sim_setup_time = 0
 
-    max_firing_rate = 80  # default = 150
+    max_firing_rate = 150  # default = 150
 
     gap_junction_gmax = {
-		"MC": 5,  # default = 32
-		"TC": 5   # default = 32
+		"MC": 32,  # default = 32
+		"TC": 32   # default = 32
 	}
 
     def __init__(self):
-        self.synapse_properties['GabaSyn']['gmax'] = 3  # default = 2 uS
-        self.synapse_properties['AmpaNmdaSyn']['gmax'] = 100  # default = 64 uS
+        self.synapse_properties['GabaSyn']['gmax'] = 2  # default = 2 uS
+        self.synapse_properties['AmpaNmdaSyn']['gmax'] = 64  # default = 64 uS
 
-        self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0
+        self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 1
 
 
 class GammaSignature_Modified(GammaSignature):
@@ -310,10 +324,6 @@ class BackgroundInput(GammaSignature_Modified):
      background_current = 0.5  # nA
 
 
-class GammaSignature_SetupTime(GammaSignature):
-    sim_setup_time = 50  # ms
-
-    
 
 class GABA_TauOne(GammaSignature):
     sim_setup_time = 50  # ms
@@ -434,7 +444,7 @@ class OnlyExcSyn(GammaSignature):
 class MaxFiringRate(GammaSignature):
     sim_setup_time = 50  # ms
 
-    max_firing_rate = 150
+    max_firing_rate = 60
 
 
 class NoExcPlasticity(GammaSignature):
