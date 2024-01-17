@@ -172,7 +172,8 @@ class OlfactoryBulb:
                            'ampa_nmda_gmax': params.synapse_properties['AmpaNmdaSyn']['gmax'],
                            'max_firing_rate': params.max_firing_rate,
                            'background_current': params.background_current,
-                           'sniff_rate':params.sniff_rate}
+                           'sniff_rate': params.sniff_rate,
+                           'dt': params.sim_dt}
             
             with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
                 yaml.dump(params_dict, outfile, default_flow_style=False)
