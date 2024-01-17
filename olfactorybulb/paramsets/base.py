@@ -52,23 +52,38 @@ class SilentNetwork:
     odors_for_block = []
 
     # Mild odor input spikes
+    #input_odors = {
+    #    0:   {"name": "Apple", "rel_conc": 0.1},
+    #    200: {"name": "Apple", "rel_conc": 0.2},
+    #    400: {"name": "Apple", "rel_conc": 0.2},
+    #    600: {"name": "Apple", "rel_conc": 0.2},
+    #    800: {"name": "Apple", "rel_conc": 0.2},
+    #    1000: {"name": "Apple", "rel_conc": 0.2},
+    #    1200: {"name": "Apple", "rel_conc": 0.2},
+    #    1400: {"name": "Apple", "rel_conc": 0.2},
+    #    1600: {"name": "Apple", "rel_conc": 0.2},
+    #    1800: {"name": "Apple", "rel_conc": 0.2},
+     #}
+    sniff_rate = 5    # Hz
+    t_sniff = int(1000/sniff_rate)
+
     input_odors = {
         0:   {"name": "Apple", "rel_conc": 0.1},
-        200: {"name": "Apple", "rel_conc": 0.2},
-        400: {"name": "Apple", "rel_conc": 0.2},
-        600: {"name": "Apple", "rel_conc": 0.2},
-        800: {"name": "Apple", "rel_conc": 0.2},
-        1000: {"name": "Apple", "rel_conc": 0.2},
-        1200: {"name": "Apple", "rel_conc": 0.2},
-        1400: {"name": "Apple", "rel_conc": 0.2},
-        1600: {"name": "Apple", "rel_conc": 0.2},
-        1800: {"name": "Apple", "rel_conc": 0.2},
+        t_sniff: {"name": "Apple", "rel_conc": 0.2},
+        2*t_sniff: {"name": "Apple", "rel_conc": 0.2},
+        3*t_sniff: {"name": "Apple", "rel_conc": 0.2},
+        4*t_sniff: {"name": "Apple", "rel_conc": 0.2},
+        5*t_sniff: {"name": "Apple", "rel_conc": 0.2},
+        6*t_sniff: {"name": "Apple", "rel_conc": 0.2},
+        7*t_sniff: {"name": "Apple", "rel_conc": 0.2},
+        8*t_sniff: {"name": "Apple", "rel_conc": 0.2},
+        9*t_sniff: {"name": "Apple", "rel_conc": 0.2},
     }
 
     rel_conc_scale = 1
 
     # From Manabe & Mori (2013) fast: 100-150ms, slow: 150 ms
-    inhale_duration = 125  # ms
+    inhale_duration = 125  # ms default 125
 
     # ORN firing rate
     max_firing_rate = 150  # Hz from Duchamp-Viret et. al. (2000)
@@ -87,7 +102,7 @@ class SilentNetwork:
 
     # LFP electrode
     # Inside dorsal Granule Layer
-    # Approximaly to where it was located in Manabe & Mori (2013)
+    # Approximately to where it was located in Manabe & Mori (2013)
     # In adult male Long-Evans rat:
     # 8.0 mm anterior to the bregma
     # 1.3 mm lateral to the midline
