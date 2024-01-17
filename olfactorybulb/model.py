@@ -173,7 +173,8 @@ class OlfactoryBulb:
                            'max_firing_rate': params.max_firing_rate,
                            'background_current': params.background_current,
                            'sniff_rate': params.sniff_rate,
-                           'dt': params.sim_dt}
+                           'dt': params.sim_dt,
+                           'sniff_count': params.sniff_count}
             
             with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
                 yaml.dump(params_dict, outfile, default_flow_style=False)
