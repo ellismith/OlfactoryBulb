@@ -78,8 +78,39 @@ class SliceBuilderNRN:
         :param class_name: One of the cell classes in prev_ob_models.Birgiolas2020.isolated_cells
         :return: The name that NEURON gives to the cell soma segment e.g. 'MC5[0].soma'
         """
-
-        exec ("cell = " + class_name + "()")
+        print(class_name + "print statement")
+        if class_name == 'TC1':
+            cell = TC1()
+        if class_name == 'TC2':
+            cell = TC2()
+        if class_name == 'TC3':
+            cell = TC3()
+        if class_name == 'TC4':
+            cell = TC4()
+        if class_name == 'TC5':
+            cell = TC5()
+        if class_name == 'MC1':
+            cell = MC1()
+        if class_name == 'MC2':
+            cell = MC2()
+        if class_name == 'MC3':
+            cell = MC3()
+        if class_name == 'MC4':
+            cell = MC4()
+        if class_name == 'MC5':
+            cell = MC5()
+        if class_name == 'GC1':
+            cell = GC1()
+        if class_name == 'GC2':
+            cell = GC2()
+        if class_name == 'GC3':
+            cell = GC3()
+        if class_name == 'GC4':
+            cell = GC4()
+        if class_name == 'GC5':
+            cell = GC5()
+        else:
+            exec ("cell = " + class_name + "()")
 
         self.cells[type].append(cell)
 
