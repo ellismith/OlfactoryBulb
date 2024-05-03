@@ -1,5 +1,6 @@
 import os
 
+
 class SilentNetwork:
 
     description = "A base, silent network with mild odor input and all synapses blocked"
@@ -13,7 +14,7 @@ class SilentNetwork:
     slice_dir = os.path.join('olfactorybulb', 'slices')
     slice_name = "DorsalColumnSlice"
 
-    sim_dt = 1 / 10.0
+    sim_dt = 0.1   # default 1 / 10.
     sim_setup_time = 0
 
     recording_period = 1 / 10.0  # ms
@@ -51,21 +52,9 @@ class SilentNetwork:
 
     odors_for_block = []
 
-    # Mild odor input spikes
-    #input_odors = {
-    #    0:   {"name": "Apple", "rel_conc": 0.1},
-    #    200: {"name": "Apple", "rel_conc": 0.2},
-    #    400: {"name": "Apple", "rel_conc": 0.2},
-    #    600: {"name": "Apple", "rel_conc": 0.2},
-    #    800: {"name": "Apple", "rel_conc": 0.2},
-    #    1000: {"name": "Apple", "rel_conc": 0.2},
-    #    1200: {"name": "Apple", "rel_conc": 0.2},
-    #    1400: {"name": "Apple", "rel_conc": 0.2},
-    #    1600: {"name": "Apple", "rel_conc": 0.2},
-    #    1800: {"name": "Apple", "rel_conc": 0.2},
-     #}
     sniff_rate = 5    # Hz
     t_sniff = int(1000/sniff_rate)
+    sniff_count = 8
 
     input_odors = {
         0:   {"name": "Apple", "rel_conc": 0.1},
@@ -110,6 +99,7 @@ class SilentNetwork:
     lfp_electrode_location = [116, 1078, -61]
 
     record_from_somas = ['MC', 'TC', 'GC']
+
 
 class ParameterSetBase(SilentNetwork):
     pass
