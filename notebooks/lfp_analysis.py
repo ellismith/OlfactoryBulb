@@ -126,32 +126,39 @@ def get_params(paramset):
     if 'tau' in paramset.lower():
         params_filename = f'tau1={gaba_tau1}, tau2={gaba_tau2}, setup_time={setup_time}'
     elif 'modified' in paramset.lower():
-        params_filename = f'nmda_toggle={nmda_toggle}, gaba_gmax={gaba_gmax}, ampa_nmda_gmax={ampa_nmda_gmax}, mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, setup_time={setup_time}'
+        params_filename = f'nmda_toggle={nmda_toggle}, gaba_gmax={gaba_gmax}, \
+            ampa_nmda_gmax={ampa_nmda_gmax}, mc_gj_gmax={mc_gap_junction_gmax}, \
+                tc_gj_gmax={tc_gap_junction_gmax}, setup_time={setup_time}'
     elif 'setup' in paramset.lower():
         params_filename = f'setup_time={setup_time}'
     elif 'plasticity' in paramset.lower():
         params_filename = f'ltpinvl={ltpinvl}, ltdinvl={ltdinvl}, setup_time={setup_time}'
     elif 'only' in paramset.lower():
-        params_filename = f'mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, gaba_gmax={gaba_gmax}, ampa_nmda_gmax={ampa_nmda_gmax}, setup_time={setup_time}'
+        params_filename = f'mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, \
+            gaba_gmax={gaba_gmax}, ampa_nmda_gmax={ampa_nmda_gmax}, setup_time={setup_time}'
     elif 'unconnected' in paramset.lower():
-        params_filename = f'mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, gaba_gmax={gaba_gmax}, ampa_nmda_gmax={ampa_nmda_gmax}, setup_time={setup_time}'
+        params_filename = f'mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, \
+            gaba_gmax={gaba_gmax}, ampa_nmda_gmax={ampa_nmda_gmax}, setup_time={setup_time}'
     elif 'inh' in paramset.lower():
         params_filename = f'gaba_gmax={gaba_gmax}, setup_time={setup_time}'
     elif 'excandelec' in paramset.lower():
-        params_filename = f'ampa_nmda_gmax={ampa_nmda_gmax}, mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, setup_time={setup_time}'
+        params_filename = f'ampa_nmda_gmax={ampa_nmda_gmax}, mc_gj_gmax={mc_gap_junction_gmax}, \
+            tc_gj_gmax={tc_gap_junction_gmax}, setup_time={setup_time}'
     elif 'exc' in paramset.lower():
         params_filename = f'ampa_nmda_gmax={ampa_nmda_gmax}, setup_time={setup_time}'
     elif 'trode' in paramset.lower():
         params_filename = f'electrode_location={electrode_location}'   
     elif 'elec' in paramset.lower():
-        params_filename = f'mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, setup_time={setup_time}'
+        params_filename = f'mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, \
+            setup_time={setup_time}'
     elif 'nmda' in paramset.lower():
         params_filename = f'nmda_toggle={nmda_toggle}'
     elif 'background_current' in paramset.lower():
         print('YES')
         params_filename = f'background_current={background_current}'
     elif 'input' in paramset.lower():
-        params_filename = f'mc_input_weight={mc_input_weight}, tc_input_weight={tc_input_weight}, setup_time={setup_time}'
+        params_filename = f'mc_input_weight={mc_input_weight}, \
+            tc_input_weight={tc_input_weight}, setup_time={setup_time}'
     elif 'sniff_rate' in paramset.lower():
         params_filename = f'sniff_rate={sniff_rate}'
     elif 'dt' in paramset.lower():
@@ -246,7 +253,8 @@ def load_result(paramset):
 
     # range(1,9) for 8 sniffs
     # [skip_first_n_sniffs:] creates a new Python list with all but the first element 
-    lfp_wavelet_power_per_sniff = np.array([lfp_wavelet_power[:,i*step:(i+1)*step-2] for i in range(sniff_count+skip_first_n_sniffs)[skip_first_n_sniffs:]])
+    lfp_wavelet_power_per_sniff = np.array([lfp_wavelet_power[:, i*step:(i+1) * step - 2] \
+                                            for i in range(sniff_count + skip_first_n_sniffs)[skip_first_n_sniffs:]])
     lfp_wavelet_power_average = np.average(lfp_wavelet_power_per_sniff, axis=0)
     # lfp_wavelet_power_average_old = sum([lfp_wavelet_power[:,i*step:(i+1)*step-2] for i in range(sniff_count+skip_first_n_sniffs)[skip_first_n_sniffs:]])
 
@@ -260,8 +268,8 @@ def load_result(paramset):
     # lfp_wavelet_power_average = sum(sum_temp)
     t_average = t[0:step-2]
     # took out t_average, lfp_wavelet_power_average,  before params_dict
-    return events, vs, spike_times, t, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict
-
+    return events, vs, spike_times, t, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, scales, wavelet, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict
 
 
 def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, params_short=True, params_filename='default', params_title='', show=True, yaxis=True, xlabel=True):
@@ -273,7 +281,8 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, params
     if show:
         plt.subplots(figsize=(4, 5))
 
-    plt.contourf(t_average, frequencies, lfp_wavelet_power_average, 256, vmin=0, vmax=0.1, cmap='jet')
+    plt.contourf(t_average, frequencies, lfp_wavelet_power_average, 256, \
+                 vmin = 0, vmax = 0.1, cmap='jet')
     plt.xlim((0,200))
     plt.ylim((20,180))
 
@@ -287,7 +296,7 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, params
         plt.xlabel('Time Since Sniff Onset [ms]', fontsize=14)
 
 
-    plt.xticks(np.arange(round(min(t_average)), max(t_average)+1, 50.0)[:-1], fontsize=14)
+    plt.xticks(np.arange(round(min(t_average)), max(t_average)+1, 50.0)[:-1], fontsize = 14)
     #plt.title(f'{params_title}', fontsize=16, y=1.1, wrap=True)
 
     # plt.savefig(f"{fig_dir}/fingerprint-{params_filename}.pdf", bbox_inches='tight')
@@ -307,39 +316,41 @@ def plot_scalogram(times, frequencies, power, fig_dir, params_filename='default'
     plt.title(f'{params_title}', fontsize=16, y=1.1, wrap=True)
     #plt.savefig(f"{fig_dir}/scalogram-{params_filename}.jpg", bbox_inches='tight', dpi=300)
     plt.show()
-    
+
 
 def get_psd(paramset):
-    
+
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
     with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
         params_dict = yaml.load(f, Loader=yaml.FullLoader)
- 
+
     dt = params_dict['dt']    # in ms
     dt_in_sec = dt*0.001      # dt in ms to seconds
-    
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+
+    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, \
+        lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
         frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)    
 
     f, psd = signal.welch(lfp, fs=1/dt_in_sec, nperseg=nperseg)
 
     return f, psd
-    
+
 
 def get_csd(f, psd):
 
     # idk what this is
     samps_per_second = 10e4 * dt # sampling frequency (samples per time unit)  -- check?
-    
+
     freq_index_start = np.argmax(f >= 130)  # Find index where frequency >= 130 Hz
     freq_index_end = np.argmax(f >= 180) + 1  # Find index where frequency >= 180 Hz, add 1 to include 180 Hz
 
     signal1_HFO = signal1[freq_index_start:freq_index_end]
     signal2_HFO = signal2[freq_index_start:freq_index_end]
-    
+
     f, Pxy = signal.csd(signal1_HFO, signal2_HFO, fs=samps_per_second, nperseg=1024)
-    
+
     return f, Pxy
+
 
 def plot_csd(signal1, signal2):
     f, Pxy = get_csd(signal1, signal2)
@@ -348,30 +359,33 @@ def plot_csd(signal1, signal2):
     plt.ylabel('CSD [V**2/Hz]')
     plt.show()
 
+
 def plot_average_vs_paramsets(sets, paramset, fig_dir, labels=None):
     count = len(sets)
-    
+
     #fig = plt.figure()
     plt.subplots(figsize=(count*4, 5))
-    
+
     for i, paramset in enumerate(sets):
         plt.subplot(1, count, i+1)
-        
+
         #paramset_dir = os.path.join(results_dir, paramset)
         with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
             params_dict = yaml.load(f, Loader=yaml.FullLoader)
 
         dt = params_dict['dt']
         sniff_count = params_dict['sniff_count']
-        
-        events, vs, spike_times, t_lfp, lfp, lfp_bp_gamma, lfp_wavelet_power, \
-            frequencies, t_average, lfp_wavelet_power_average = load_result(paramset) 
-        
-        plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, show=False, yaxis=i==0,xlabel=i==count/2)
+
+        events, vs, spike_times, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_wavelet_power, \
+            frequencies, t_average, lfp_wavelet_power_average = load_result(paramset)
+
+        plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average,
+                           paramset, fig_dir, show=False,
+                           yaxis=i == 0, xlabel=i == count/2)
         if labels is not None:
             plt.title(labels[i])
 
-    
+
     plt.subplots_adjust(wspace=0, hspace=0)
     plt.show()
 
@@ -379,7 +393,6 @@ def plot_average_vs_paramsets(sets, paramset, fig_dir, labels=None):
 def show_subplot(paramset, params_short=True):
 
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-
 
     fig_width = 27
     events, vs, spike_times, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
@@ -399,9 +412,10 @@ def show_subplot(paramset, params_short=True):
     else:
         params_title = params_list
 
-    fig2, ax2 = plt.subplots(1,1, figsize=(fig_width,len(vs)*0.12))
+    fig2, ax2 = plt.subplots(1,1, figsize=(fig_width, len(vs)*0.12))
 
-    fig, ax = plt.subplots(3, 1, gridspec_kw={'height_ratios':[3,1,1]}, figsize=(fig_width,len(vs)*0.12 + 5*2))
+    fig, ax = plt.subplots(3, 1, gridspec_kw={'height_ratios': [3, 1, 1]},
+                           figsize=(fig_width, len(vs)*0.12 + 5*2))
     ax.ravel()
 
     # ax2.ravel()
@@ -416,9 +430,9 @@ def show_subplot(paramset, params_short=True):
             col = 'magenta'
         if 'GC' in cell:
             col = 'orange'
-            continue # don't plot GCs
+            continue   # don't plot GCs
 
-        ax[0].plot(t,np.array(v)+i,col,label=cell)
+        ax[0].plot(t, np.array(v) + i, col, label=cell)
         i += 100
         # j += 1
 
@@ -426,7 +440,7 @@ def show_subplot(paramset, params_short=True):
     for cell, t, v in vs:
         if 'GC' in cell:
             col = 'orange'
-            ax2.plot(t,np.array(v)+j,col,label=cell)
+            ax2.plot(t, np.array(v)+j, col, label=cell)
         j += 100
 
     ax2.set_xticks(np.arange(min(t), max(t)+1, 50.0))
@@ -447,8 +461,7 @@ def show_subplot(paramset, params_short=True):
             col = 'b'
         if 'TC' in seg:
             col = 'm'
-        # plt.plot(times, [i]*len(times),col+'|',ms=5,label=seg)
-        ax[0].plot(times, [i]*len(times),col+'|',ms=5,label=seg)
+        ax[0].plot(times, [i]*len(times), col+'|',ms=5,label=seg)
 
         i += 10
 
@@ -460,22 +473,18 @@ def show_subplot(paramset, params_short=True):
     ax[0].spines['right'].set_visible(False)
     ax[0].spines['left'].set_visible(False)
     ax[0].set_xlabel('Simulation Time [ms]', fontsize=18)
-    #ax[0].set_title(f'Raster and Spike Trace')
-    # ax[0].savefig(f"{fig_dir}/raster-delay_{delay}_{rel_conc}.jpg")
-    # ax[0].show()
 
     t = t_lfp
 
     # Plot raw LFP
-    # plt.subplots(figsize=(fig_width, 5))
     ax[1].margins(0)
-    ax[1].plot(t,lfp*1000+200,label='raw', color='black')
+    ax[1].plot(t, lfp*1000 + 200, label='raw', color='black')
 
     # Plot beta BP filtered LFP
-    ax[1].plot(t,lfp_bp_beta*10000-200,label='BP filtered: beta', color='purple')
+    ax[1].plot(t, lfp_bp_beta*10000-200, label='BP filtered: beta', color='purple')
 
     # Plot gamma BP filtered LFP
-    ax[1].plot(t,lfp_bp_gamma*10000-800,label='BP filtered: gamma', color='orange')
+    ax[1].plot(t, lfp_bp_gamma*10000-800, label='BP filtered: gamma', color='orange')
 
     # Plot HFO BP filtered LFP
     #ax[1].plot(t,lfp_bp_hfo*10000-800,label='BP filtered: HFO', color='green')
@@ -863,7 +872,7 @@ def get_power_f_range(paramset, f_min, f_max, nperseg=2000):
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
     with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
         params_dict = yaml.load(f, Loader=yaml.FullLoader)
- 
+
     dt = params_dict['dt']    # in ms
     dt_in_sec = dt*0.001      # dt in ms to seconds
     assert 1/dt_in_sec == 10000
@@ -967,8 +976,6 @@ def plot_power_hfo(paramsets):
     plt.show()
 
 
-
-
 def plot_STFT(t_lfp, lfp):
     # compute and plot STFT
 
@@ -983,7 +990,7 @@ def plot_STFT(t_lfp, lfp):
 
 def get_cell_info(events):
     """
-     
+
     """
     events_ = [(seg, times) for seg, times in events.items()]
     events_.sort(key=lambda row: row[0])
@@ -1004,12 +1011,13 @@ def get_cell_info(events):
 
 def get_lfp_maxs(paramsets_):
     # for given list of parameter sets, returns list of max lfp values 
-    
+
     lfp_maximums = []
     lfp_avg_maximums = []
     for paramset_ in paramsets_:
-        events, vs, spike_times, t_lfp, lfp, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-            frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset_)
+        events, vs, spike_times, t_lfp, lfp, lfp, bp, beta, lfp_bp_gamma, lfp_bp_hfo, \
+            lfp_wavelet_power, scales, wavelet, dt, frequencies, t_average, \
+                lfp_wavelet_power_average, params_dict = load_result(paramset_)
         lfp_maximums.append(np.max(lfp_wavelet_power))
         lfp_avg_maximums.append(np.max(lfp_wavelet_power_average))
 
