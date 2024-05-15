@@ -117,3 +117,16 @@ x86_64/
 blender-files/delete/
 
 doctrees/
+
+# figures
+*.png
+*.jpg
+
+# data (Hunt lab)
+*.smr
+*.pkl
+*.npy
+
+# parameters
+*.yml
+
