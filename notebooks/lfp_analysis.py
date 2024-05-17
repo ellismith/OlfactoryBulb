@@ -13,7 +13,7 @@ import yaml
 from pylab import * 
 from scipy import signal
 from scipy.interpolate import interp1d
-from scipy.signal import butter, lfilter, spectrogram
+from scipy.signal import butter, lfilter, spectrogram, sosfilt, stft
 import math
 import matplotlib.colors as mcolors
 import matplotlib.ticker as tkr
@@ -423,16 +423,33 @@ def show_subplot(paramset, params_short=True):
     i = 0
     # j = 0
     # plt.subplots(figsize=(fig_width, len(vs)*0.1))
+
+
+    glomcell_list1 = ['MC4[0]', 'MC5[0]', 'MC5[4]', 'MC5[14]', 'TC5[0]', 'TC4[0]', 'TC4[6]', 'TC4[8]', 'TC5[18]', 'TC5[20]']
+
+    glomcell_list2 = ['MC5[2]', 'MC5[6]', 'MC5[8]', 'MC5[10]', 'MC5[12]', 'MC4[2]', 'TC3[0]', 'TC4[2]', 'TC5[2]', 'TC4[4]', 'TC5[4]', 'TC3[2]', 'TC5[6]', 'TC5[8]', 'TC5[10]', 'TC3[4]', 'TC4[10]', 'TC3[6]', 'TC5[12]', 'TC5[14]', 'TC4[12]', 'TC5[16]', 'TC4[14]', 'TC4[16]']
+
     for cell, t, v in vs:
+        
         if 'MC' in cell:
             col = 'blue'
+            if cell.split('.')[0]in glomcell_list1:
+                linestyle='--'
+            else:
+                linestyle='-'
         if 'TC' in cell:
             col = 'magenta'
+            if cell.split('.')[0]in glomcell_list1:
+                linestyle='--'
+            else:
+                linestyle='-'
         if 'GC' in cell:
             col = 'orange'
+            linestyle='-'
+        
             continue   # don't plot GCs
 
-        ax[0].plot(t, np.array(v) + i, col, label=cell)
+        ax[0].plot(t, np.array(v) + i, col, linestyle=linestyle, label=cell)
         i += 100
         # j += 1
 
@@ -478,13 +495,13 @@ def show_subplot(paramset, params_short=True):
 
     # Plot raw LFP
     ax[1].margins(0)
-    ax[1].plot(t, lfp*1000 + 200, label='raw', color='black')
+    ax[1].plot(t, lfp*10000 + 200, label='raw', color='black')
 
     # Plot beta BP filtered LFP
-    ax[1].plot(t, lfp_bp_beta*10000-200, label='BP filtered: beta', color='purple')
+    ax[1].plot(t, lfp_bp_beta*10000-400, label='BP filtered: beta', color='purple')
 
     # Plot gamma BP filtered LFP
-    ax[1].plot(t, lfp_bp_gamma*10000-800, label='BP filtered: gamma', color='orange')
+    ax[1].plot(t, lfp_bp_gamma*10000-1000, label='BP filtered: gamma', color='orange')
 
     # Plot HFO BP filtered LFP
     #ax[1].plot(t,lfp_bp_hfo*10000-800,label='BP filtered: HFO', color='green')
@@ -522,7 +539,7 @@ def show_subplot(paramset, params_short=True):
     # plt.tight_layout()
     # plt.savefig(f'{fig_dir}/comb-{params_filename}.pdf', bbox_inches='tight')
     plt.savefig(f'{fig_dir}/spikes_spectrogram_{params_filename}.jpg', bbox_inches='tight', dpi=300)
-    fig.colorbar(sp, format=tkr.FormatStrFormatter('%.2f')).set_label('LFP Wavelet Power ($V^2/Hz$)')
+    #fig.colorbar(sp, format=tkr.FormatStrFormatter('%.2f')).set_label('LFP Wavelet Power ($V^2/Hz$)')
     plt.show()
 
     plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, params_filename=params_filename, params_title=params_filename)
@@ -777,36 +794,92 @@ def plot_lfp_power_psd(t_lfp, lfp, paramset, NFFT = 150):
     plt.show()
 
 
+def filter_and_transform_lfp(lfp, fs, lowcut=0.1, highcut=200):
+    """
+    Filters the LFP signal between lowcut and highcut, then applies STFT.
+    
+    Parameters:
+    lfp (array): LFP timeseries data.
+    fs (float): Sampling frequency of the LFP data.
+    lowcut (float): Low cut-off frequency for the bandpass filter.
+    highcut (float): High cut-off frequency for the bandpass filter.
+    
+    Returns:
+    f (array): Array of sample frequencies.
+    t (array): Array of segment times.
+    Zxx (2D array): STFT of lfp signal.
+    """
+    # Ensure that the filter cut-off frequencies are within the valid range
+    nyquist = fs / 2
+    low = lowcut / nyquist
+    high = highcut / nyquist
+    
+    if not (0 < low < high < 1):
+        raise ValueError(f"Invalid filter frequencies: low={lowcut}, high={highcut}, nyquist={nyquist}")
+    
+    # Design a bandpass filter
+    sos = butter(10, [low, high], btype='bandpass', output='sos')
+    filtered_lfp = sosfilt(sos, lfp)
+    
+    # Compute the Short-Time Fourier Transform (STFT)
+    f, t, Zxx = stft(filtered_lfp, fs, nperseg=256)
+    
+    return f, t, Zxx
+
+
+def plot_spectrogram(f, t, Zxx):
+    """
+    Plots the spectrogram of the LFP signal.
+    
+    Parameters:
+    f (array): Array of sample frequencies.
+    t (array): Array of segment times.
+    Zxx (2D array): STFT of lfp signal.
+    """
+    plt.figure(figsize=(10, 6))
+    plt.pcolormesh(t, f, np.abs(Zxx), shading='gouraud')
+    plt.colorbar(label='Intensity')
+    plt.title('Spectrogram of LFP Signal')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [sec]')
+    plt.ylim([0, 200])
+    plt.show()
+
+
 def get_lfp_fft(paramset):
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
     with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
         params_dict = yaml.load(f, Loader=yaml.FullLoader)
 
     dt = params_dict['dt']    # in ms
-    dt_in_sec = dt*0.001      # dt in ms to seconds
+    dt_in_sec = dt * 0.001    # dt in ms to seconds
     sniff_count = params_dict['sniff_count']
 
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)   
+    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+    frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
 
-    # compute the Fourier transform of lfp signal
-    lfp_ft = rfft(lfp - lfp.mean())
+    fs = 1 / dt_in_sec  # Sampling frequency in Hz
 
-    N = lfp.shape[0]    # Define the total number of data points
-    T = N * dt_in_sec   # T = the total duration of the data
-    #T = t_lfp[-1]*0.001
-    # compute the spectrum, the Fourier transform of lfp multiplied by its complex conjugate
-    Sxx = (2 * dt ** 2 / T * lfp_ft * lfp_ft.conj()).real
-    Sxx = Sxx[:int(len(lfp) / 2)]
-    df = 1 / T                              # Determine frequency resolution, 1 / total_duration_in_sec
-    #fNQ = 1 / dt / 2                        # Determine Nyquist frequency
-    faxis = arange(len(Sxx)) * df              # Construct frequency axis
+    # Print statements to debug
+    print(f"Sampling frequency (fs): {fs} Hz")
+    print(f"Length of LFP data: {len(lfp)}")
+    print(f"First 5 values of LFP data: {lfp[:5]}")
+    
+    # Filter and transform the LFP data
+    f, t, Zxx = filter_and_transform_lfp(lfp, fs)
+    
+    # Debugging outputs for the filtered and transformed data
+    print(f"Shape of STFT result Zxx: {Zxx.shape}")
+    print(f"First 5 frequency bins: {f[:5]}")
+    print(f"First 5 time bins: {t[:5]}")
 
-    return t_lfp, lfp_ft, faxis, Sxx
+    # Plot the spectrogram
+    plot_spectrogram(f, t, Zxx)
+
 
 
 def plot_lfp_fft(faxis, Sxx):
-    plt.plot(faxis, real(Sxx), color='red')       # Plot spectrum vs frequency, experimental manipulation
+    plt.plot(faxis, Sxx, color='red')       # Plot spectrum vs frequency, experimental manipulation
     plt.xlim([0, 200])                          # Select frequency range
     #ylim([0,0.8])
     plt.xlabel('Frequency [Hz]')                # Label the axes
@@ -814,12 +887,16 @@ def plot_lfp_fft(faxis, Sxx):
     plt.show()
 
 
-def plot_lfp_spectrogram(t_lfp, lfp_ft, faxis, Sxx):
+def plot_lfp_spectrogram(t_lfp, faxis, Sxx):
+    
+    #plt.pcolormesh(t_lfp, faxis, Sxx, cmap='jet')# 10 * log10(Sxx)
+    # Create a meshgrid of time and frequency values
+    t_mesh, f_mesh = np.meshgrid(t_lfp, faxis)
 
-    plt.pcolormesh(t_lfp, faxis, 10 * log10(Sxx), cmap='jet')# Plot the result
-    plt.colorbar()                # ... with a color bar,
-    #plt.ylim([0, 70])             # ... set the frequency range,
-    plt.xlabel('Time [s]')        # ... and label the axes
+    # Plot the spectrogram
+    plt.pcolormesh(t_mesh, f_mesh, Sxx, cmap='jet')  # Transpose Sxx
+    plt.colorbar()
+    plt.xlabel('Time [s]')
     plt.ylabel('Frequency [Hz]')
     plt.show()
 
@@ -878,7 +955,7 @@ def get_power_f_range(paramset, f_min, f_max, nperseg=2000):
     assert 1/dt_in_sec == 10000
     sniff_count = params_dict['sniff_count']
 
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
         frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
 
     f, psd = signal.welch(lfp, fs=1/dt_in_sec, nperseg=nperseg)
