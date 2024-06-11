@@ -14,8 +14,10 @@ from pylab import *
 from scipy import signal
 from scipy.interpolate import interp1d
 from scipy.signal import butter, lfilter, spectrogram, sosfilt, stft
+#from scipy.signal import ShortTimeFFT
 import math
 import matplotlib.colors as mcolors
+import matplotlib.cm as cm
 import matplotlib.ticker as tkr
 import pandas as pd
 
@@ -102,6 +104,8 @@ def get_params(paramset):
     background_current = params_dict['background_current']
     max_firing_rate = params_dict['max_firing_rate']
     sniff_rate = params_dict['sniff_rate']
+    electrode_location = params_dict['electrode_location']
+    electrode_location2 = params_dict['electrode_location2']
     if 'dt' in params_dict:
         dt = params_dict['dt']
     else:
@@ -111,15 +115,17 @@ def get_params(paramset):
     else:
         sniff_count = 8
     
-    if 'electrode_location' in params_dict:  # Check if 'electrode_location' is None
-        electrode_location = params_dict['electrode_location']
-    else:
-        pass
+    #if 'electrode_location' in params_dict:  # Check if 'electrode_location' is None
+    #    electrode_location = params_dict['electrode_location']
+    #if 'electrode_location2' in params_dict:  # Check if 'electrode_location' is None
+    #    electrode_location2 = params_dict['electrode_location2']
+    #else:
+    #    pass
 
     params_list = f'setup_time={setup_time}, gaba_gmax={gaba_gmax}, gaba_tau1={gaba_tau1}, gaba_tau2={gaba_tau2}, mc_input_weight={mc_input_weight}, '\
                   f'tc_input_weight={tc_input_weight},\n mc_gap_junction_gmax={mc_gap_junction_gmax}, tc_gap_junction_gmax={tc_gap_junction_gmax}, '\
                   f'nmda_toggle={nmda_toggle}, ampa_nmda_gmax={ampa_nmda_gmax}, max_firing_rate={max_firing_rate}, sniff_rate={sniff_rate}, '\
-                  f'dt={dt}, sniff_count={sniff_count}, background_current={background_current}'
+                  f'dt={dt}, sniff_count={sniff_count}, background_current={background_current}, electrode_location={electrode_location}, electrode_location2={electrode_location2}'
 
     params_filename = ''
 
@@ -129,8 +135,8 @@ def get_params(paramset):
         params_filename = f'nmda_toggle={nmda_toggle}, gaba_gmax={gaba_gmax}, \
             ampa_nmda_gmax={ampa_nmda_gmax}, mc_gj_gmax={mc_gap_junction_gmax}, \
                 tc_gj_gmax={tc_gap_junction_gmax}, setup_time={setup_time}'
-    elif 'setup' in paramset.lower():
-        params_filename = f'setup_time={setup_time}'
+    #elif 'setup' in paramset.lower():
+        #params_filename = f'setup_time={setup_time}'
     elif 'plasticity' in paramset.lower():
         params_filename = f'ltpinvl={ltpinvl}, ltdinvl={ltdinvl}, setup_time={setup_time}'
     elif 'only' in paramset.lower():
@@ -172,7 +178,7 @@ def get_params(paramset):
     return params_list, params_filename
 
 
-def load_result(paramset):
+def load_result(paramset, lfp_pkl_file='lfp.pkl'):
     """
     Loads the parameters, input times, spike times, voltage signals for each cell, and LFP signal.
     Applies wavelet transformation to the LFP signal.
@@ -183,7 +189,6 @@ def load_result(paramset):
     
     with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
         params_dict = yaml.load(f, Loader=yaml.FullLoader)
-        print(params_dict)
     
     if 'dt' in params_dict:
         dt = params_dict['dt']
@@ -220,11 +225,12 @@ def load_result(paramset):
         vs = cPickle.load(f)
         vs.sort(key=lambda row: row[0][0:2])
         
-    with open(os.path.join(paramset_dir, 'lfp.pkl'), 'rb') as f:
+    with open(os.path.join(paramset_dir, lfp_pkl_file), 'rb') as f:
         t, lfp = cPickle.load(f)
         t = np.array(t)
         lfp = np.array(lfp)
         t, lfp = interpolate(t,lfp, dt)
+
 
     # Band pass filter LFP
     lfp_bp_beta = butter_bandpass_filter(lfp, 15, 40, 1/dt*1000, order=3)  # 15, 40 Hz, order=4 default
@@ -275,14 +281,15 @@ def load_result(paramset):
 def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, params_short=True, params_filename='default', params_title='', show=True, yaxis=True, xlabel=True):
 
     params_list, params_filename = get_params(paramset)
-    print("params_filename: ", params_filename)
+    #print("params_filename: ", params_filename)
 
     # electrode_location = params_dict['electrode_location']
     if show:
         plt.subplots(figsize=(4, 5))
 
+    colors = cm.get_cmap('Blues', 200)
     plt.contourf(t_average, frequencies, lfp_wavelet_power_average, 256, \
-                 vmin = 0, vmax = 0.1, cmap='jet')
+                 vmin = 0, vmax = 0.1, cmap=colors)
     plt.xlim((0,200))
     plt.ylim((20,180))
 
@@ -355,7 +362,7 @@ def get_csd(f, psd):
 def plot_csd(signal1, signal2):
     f, Pxy = get_csd(signal1, signal2)
     plt.semilogy(f, np.abs(Pxy))
-    plt.xlabel('frequency [Hz]')
+    plt.xlabel('Frequency [Hz]', fontsize=14)
     plt.ylabel('CSD [V**2/Hz]')
     plt.show()
 
@@ -390,8 +397,7 @@ def plot_average_vs_paramsets(sets, paramset, fig_dir, labels=None):
     plt.show()
 
 
-def show_subplot(paramset, params_short=True):
-
+def show_subplot2(paramset, params_short=True):
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
 
     fig_width = 27
@@ -403,7 +409,120 @@ def show_subplot(paramset, params_short=True):
     else:
         dt = 0.1
 
-    # electrode_location = params_dict['electrode_location']
+    params_list, params_filename = get_params(paramset)
+
+    if params_short:
+        params_title = params_filename
+    else:
+        params_title = params_list
+
+    # Adjust height ratios
+    fig, ax = plt.subplots(4, 1, gridspec_kw={'height_ratios': [12, 1, 1, 1]}, figsize=(fig_width, len(vs) * 0.12 + 5 * 3))
+
+    glomcell_list1 = ['MC4[0]', 'MC5[0]', 'MC5[4]', 'MC5[14]', 'TC5[0]', 'TC4[0]', 'TC4[6]', 'TC4[8]', 'TC5[18]', 'TC5[20]']
+    i = 0
+
+    for cell, t, v in vs:
+        if 'MC' in cell:
+            col = 'blue'
+            #linestyle = '-' if cell.split('.')[0] in glomcell_list1 else '--'
+        elif 'TC' in cell:
+            col = 'magenta'
+            #linestyle = '-' if cell.split('.')[0] in glomcell_list1 else '--'
+        elif 'GC' in cell:
+            col = 'orange'
+            #continue  # don't plot GCs
+
+        ax[0].plot(t, np.array(v) + i, col, label=cell)
+        i += 100
+
+    events = [(seg, times) for seg, times in events.items()]
+    events.sort(key=lambda row: row[0])
+
+    for seg, times in events:
+        col = 'b' if 'MC' in seg else 'm' if 'TC' in seg else 'k'
+        ax[0].plot(times, [i] * len(times), col + '|', ms=5, label=seg)
+        i += 10
+
+    ax[0].set_xticks(np.arange(min(t), max(t) + 1, 50.0))
+    ax[0].tick_params(labelsize=12)
+    ax[0].margins(0)
+    ax[0].set_yticks([])
+    ax[0].spines['top'].set_visible(False)
+    ax[0].spines['right'].set_visible(False)
+    ax[0].spines['left'].set_visible(False)
+    ax[0].set_xlabel('Simulation Time [ms]', fontsize=18)
+
+    spiking_cells, spike_times_clean = get_spiking_cells(spike_times)
+    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'TC')
+    plot_spikes_hist(ax[1], bincenters, rates, 'magenta')
+    ax[1].set_title('TC Spike Histogram')
+
+    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'MC')
+    plot_spikes_hist(ax[2], bincenters, rates, 'blue')
+    ax[2].set_title('MC Spike Histogram')  # Corrected title
+
+    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'GC')
+    plot_spikes_hist(ax[3], bincenters, rates, 'orange')
+    ax[3].set_title('GC Spike Histogram')
+
+    plt.tight_layout()
+    plt.savefig(f'{fig_dir}/spikes_hist_{params_filename}.jpg', bbox_inches='tight', dpi=300)
+    
+    plt.show()
+
+    t = t_lfp
+    fig, ax = plt.subplots(2, 1, gridspec_kw={'height_ratios': [1, 1]}, figsize=(fig_width, 16))
+
+    ax[0].margins(0)
+    ax[0].plot(t, lfp * 10000 + 200, label='raw', color='black')
+    ax[0].plot(t, lfp_bp_beta * 10000 - 400, label='BP filtered: beta', color='purple')
+    ax[0].plot(t, lfp_bp_gamma * 10000 - 1000, label='BP filtered: gamma', color='orange')
+    ax[0].set_xticks(np.arange(min(t), max(t) + 1, 50.0))
+    ax[0].tick_params(labelsize=12)
+    ax[0].set_yticks([])
+    ax[0].spines['top'].set_visible(False)
+    ax[0].spines['right'].set_visible(False)
+    ax[0].spines['left'].set_visible(False)
+    ax[0].set_xlabel('Simulation Time [ms]', fontsize=18)
+    ax[0].legend(loc=(0.9, 0.27))
+
+    colors = cm.get_cmap('Blues', 200)
+    sp = ax[1].contourf(t, frequencies, lfp_wavelet_power, 256, vmin=0, vmax=0.17, cmap=colors)
+    ax[1].set_ylim((20, 180))
+    ax[1].set_xticks(np.arange(round(min(t)), max(t) + 1, 50.0))
+    ax[1].tick_params(labelsize=12)
+    ax[1].set_ylabel('Frequency [Hz]', fontsize=14)
+    ax[1].set_xlabel('Simulation Time [ms]', fontsize=14)
+    ax[1].set_title(f'Spectrogram of LFP Signal (Wavelet Transform)', fontsize=18)
+
+    fig.colorbar(sp, format=tkr.FormatStrFormatter('%.2f')).set_label('LFP Wavelet Power ($V^2/Hz$)')
+    plt.savefig(f'{fig_dir}/spikes_spectrogram2_{params_filename}.jpg', bbox_inches='tight', dpi=300)
+    plt.show()
+
+    plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, params_filename=params_filename, params_title=params_title)
+    #plot_scalogram(t_lfp, frequencies, lfp_wavelet_power, fig_dir, params_filename=params_filename, params_title=params_title)
+
+
+def show_subplot(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
+
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+
+    fig_width = 27
+    events, vs, spike_times, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+    print("lfp_pkl_file:", lfp_pkl_file)
+
+    if 'dt' in params_dict:
+        dt = params_dict['dt']
+    else:
+        dt = 0.1
+
+    electrode_location = params_dict['electrode_location']
+    #print("electrode_location=", electrode_location)
+    electrode_location2 = params_dict['electrode_location2']
+    #print("electrode_location2=", electrode_location2)
+
 
     params_list, params_filename = get_params(paramset)
 
@@ -434,19 +553,18 @@ def show_subplot(paramset, params_short=True):
         if 'MC' in cell:
             col = 'blue'
             if cell.split('.')[0]in glomcell_list1:
-                linestyle='--'
-            else:
                 linestyle='-'
+            else:
+                linestyle='--'
         if 'TC' in cell:
             col = 'magenta'
             if cell.split('.')[0]in glomcell_list1:
-                linestyle='--'
-            else:
                 linestyle='-'
+            else:
+                linestyle='--'
         if 'GC' in cell:
-            col = 'orange'
-            linestyle='-'
-        
+            #col = 'orange'
+            #linestyle='-'
             continue   # don't plot GCs
 
         ax[0].plot(t, np.array(v) + i, col, linestyle=linestyle, label=cell)
@@ -520,16 +638,16 @@ def show_subplot(paramset, params_short=True):
     # ax[1].show()
     # large spectrogram
     # ax[2].subplots(figsize=(fig_width, 5))
-    sp = ax[2].contourf(t, frequencies, lfp_wavelet_power, 256, vmin=0, vmax=0.17, cmap='jet')
+    colors = cm.get_cmap('Blues', 200)
+    sp = ax[2].contourf(t, frequencies, lfp_wavelet_power, 256, vmin=0, vmax=0.17, cmap=colors)
 
     ax[2].set_ylim((20,180))
     ax[2].set_xticks(np.arange(round(min(t)), max(t)+1, 50.0))
     ax[2].tick_params(labelsize=12)
-    ax[2].set_ylabel('Frequency [Hz]', fontsize=18)
-    ax[2].set_xlabel('Simulation Time [ms]', fontsize=18)
-    #ax[2].set_title(f'Spectrogram')
-    if 'electrode_location' in params_dict:
-        ax[2].set_title(params_dict['electrode_location'], fontsize=24)
+    ax[2].set_ylabel('Frequency [Hz]', fontsize=14)
+    ax[2].set_xlabel('Simulation Time [ms]', fontsize=14)
+    ax[2].set_title(f'Spectrogram of LFP Signal (Wavelet Transform)', fontsize=18)
+    #ax[2].set_title('electrode locations:', params_dict['electrode_location'], params_dict['electrode_location2'], fontsize=24)
     #ax[2].savefig(f"{fig_dir}/spectrogram .jpg")
     # ax[2].show()
 
@@ -539,7 +657,7 @@ def show_subplot(paramset, params_short=True):
     # plt.tight_layout()
     # plt.savefig(f'{fig_dir}/comb-{params_filename}.pdf', bbox_inches='tight')
     plt.savefig(f'{fig_dir}/spikes_spectrogram_{params_filename}.jpg', bbox_inches='tight', dpi=300)
-    #fig.colorbar(sp, format=tkr.FormatStrFormatter('%.2f')).set_label('LFP Wavelet Power ($V^2/Hz$)')
+    fig.colorbar(sp, format=tkr.FormatStrFormatter('%.2f')).set_label('LFP Wavelet Power ($V^2/Hz$)')
     plt.show()
 
     plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, params_filename=params_filename, params_title=params_filename)
@@ -548,81 +666,385 @@ def show_subplot(paramset, params_short=True):
     plot_scalogram(t_lfp, frequencies, lfp_wavelet_power, fig_dir, params_filename=params_filename, params_title=params_filename)
 
 
+def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
 
-def plot_spikes(vs, spike_times):
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+
     fig_width = 27
+    events, vs, spike_times, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+    print("lfp_pkl_file:", lfp_pkl_file)
 
-    fig, ax = plt.subplots(2, 1, figsize=(fig_width,len(vs)*0.2))
+    if 'dt' in params_dict:
+        dt = params_dict['dt']
+    else:
+        dt = 0.1
+
+    params_list, params_filename = get_params(paramset)
+
+    if params_short:
+        params_title = params_filename
+    else:
+        params_title = params_list
+
+    #height before = len(vs)*0.12 + 5*2
+    
+    fig, ax = plt.subplots(3, 1, gridspec_kw={'height_ratios': [3, 1, 1]},
+                           figsize=(fig_width, 30))
+    ax.ravel()
+
+    # ax2.ravel()
 
     i = 0
     # j = 0
     # plt.subplots(figsize=(fig_width, len(vs)*0.1))
+
+
+    glomcell_list1 = ['MC4[0]', 'MC5[0]', 'MC5[4]', 'MC5[14]', 'TC5[0]', 'TC4[0]', 'TC4[6]', 'TC4[8]', 'TC5[18]', 'TC5[20]']
+
+    glomcell_list2 = ['MC5[2]', 'MC5[6]', 'MC5[8]', 'MC5[10]', 'MC5[12]', 'MC4[2]', 'TC3[0]', 'TC4[2]', 'TC5[2]', 'TC4[4]', 'TC5[4]', 'TC3[2]', 'TC5[6]', 'TC5[8]', 'TC5[10]', 'TC3[4]', 'TC4[10]', 'TC3[6]', 'TC5[12]', 'TC5[14]', 'TC4[12]', 'TC5[16]', 'TC4[14]', 'TC4[16]']
+
+    for cell, t, v in vs:
+        
+        if 'MC' in cell:
+            col = 'blue'
+            #if cell.split('.')[0]in glomcell_list1:
+            #    linestyle='-'
+            #else:
+            #    linestyle='--'
+        if 'TC' in cell:
+            col = 'magenta'
+            #if cell.split('.')[0]in glomcell_list1:
+            #    linestyle='-'
+            #else:
+            #    linestyle='--'
+        if 'GC' in cell:
+            #col = 'orange'
+            #linestyle='-'
+            continue   # don't plot GCs
+
+        ax[0].plot(t, np.array(v) + i, col, linestyle='-', label=cell)
+        i += 100
+        # j += 1
+
+
+    events = [(seg, times) for seg, times in events.items()]
+    events.sort(key=lambda row: row[0])
+
+    for seg, times in events:
+        if 'MC' in seg:
+            col = 'b'
+        if 'TC' in seg:
+            col = 'm'
+        ax[0].plot(times, [i]*len(times), col+'|',ms=5,label=seg)
+
+        i += 10
+
+    ax[0].set_xticks(np.arange(min(t), max(t)+1, 50.0))
+    ax[0].tick_params(labelsize=12)
+    ax[0].margins(0)
+    ax[0].set_yticks([])
+    ax[0].spines['top'].set_visible(False)
+    ax[0].spines['right'].set_visible(False)
+    ax[0].spines['left'].set_visible(False)
+    ax[0].set_xlabel('Simulation Time [ms]', fontsize=18)
+
+    t = t_lfp
+
+    # Plot raw LFP
+    ax[1].margins(0)
+    ax[1].plot(t, lfp*10000 + 200, label='raw', color='black')
+
+    # Plot beta BP filtered LFP
+    ax[1].plot(t, lfp_bp_beta*10000-400, label='BP filtered: beta', color='purple')
+
+    # Plot gamma BP filtered LFP
+    ax[1].plot(t, lfp_bp_gamma*10000-1000, label='BP filtered: gamma', color='orange')
+
+    # Plot HFO BP filtered LFP
+    #ax[1].plot(t,lfp_bp_hfo*10000-800,label='BP filtered: HFO', color='green')
+
+    ax[1].set_xticks(np.arange(min(t), max(t)+1, 50.0))
+    ax[1].tick_params(labelsize=12)
+    ax[1].set_yticks([])
+    ax[1].spines['top'].set_visible(False)
+    ax[1].spines['right'].set_visible(False)
+    ax[1].spines['left'].set_visible(False)
+    ax[1].set_xlabel('Simulation Time [ms]', fontsize=18)
+    #ax[1].set_ylabel('LFP', fontsize=18)
+    #ax[1].set_title(f'LFPs')
+    ax[1].legend(loc=(0.9,0.27))
+    # ax[1].savefig(f"{fig_dir}/bp_filt_lfp_hfo_-delay_{delay}.jpg")
+    # ax[1].show()
+    # large spectrogram
+    # ax[2].subplots(figsize=(fig_width, 5))
+    colors = cm.get_cmap('Blues', 200)
+    sp = ax[2].contourf(t, frequencies, lfp_wavelet_power, 256, vmin=0, vmax=0.17, cmap=colors)
+
+    ax[2].set_ylim((20,180))
+    ax[2].set_xticks(np.arange(round(min(t)), max(t)+1, 50.0))
+    ax[2].tick_params(labelsize=12)
+    ax[2].set_ylabel('Frequency [Hz]', fontsize=14)
+    ax[2].set_xlabel('Simulation Time [ms]', fontsize=14)
+    ax[2].set_title(f'Spectrogram of LFP Signal (Wavelet Transform)', fontsize=18)
+    #ax[2].set_title('electrode locations:', params_dict['electrode_location'], params_dict['electrode_location2'], fontsize=24)
+    #ax[2].savefig(f"{fig_dir}/spectrogram .jpg")
+    # ax[2].show()
+
+    #fig.suptitle(f'Params: {paramset, params_title}', fontsize=16, y=0.91)
+    
+    # plt.tight_layout()
+    # plt.savefig(f'{fig_dir}/comb-{params_filename}.pdf', bbox_inches='tight')
+    plt.savefig(f'{fig_dir}/spikes_spectrogram_{params_filename}.jpg', bbox_inches='tight', dpi=300)
+    fig.colorbar(sp, format=tkr.FormatStrFormatter('%.2f')).set_label('LFP Wavelet Power ($V^2/Hz$)')
+    plt.show()
+
+    #plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, params_filename=params_filename, params_title=params_filename)
+    
+    fig2, ax2 = plt.subplots(1,1, figsize=(27, 6))
+    f, t, Zxx, order = get_lfp_fft('GammaSignature_SetupTime', ax2, nperseg=5000, vmax=None, lowcut=0.1, highcut=200, order=5)
+    #cfs, frequencies = pywt.cwt(lfp_bp, scales, wavelet, dt/1000.0)
+    #plot_scalogram(t_lfp, frequencies, lfp_wavelet_power, fig_dir, params_filename=params_filename, params_title=params_filename)
+
+
+def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
+
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+
+    fig_width = 27
+    events, vs, spike_times, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+    print("lfp_pkl_file:", lfp_pkl_file)
+
+    if 'dt' in params_dict:
+        dt = params_dict['dt']
+    else:
+        dt = 0.1
+
+    params_list, params_filename = get_params(paramset)
+
+    if params_short:
+        params_title = params_filename
+    else:
+        params_title = params_list
+
+    fig, ax = plt.subplots(3, 1, gridspec_kw={'height_ratios': [3, 1, 1]},
+                           figsize=(fig_width, 30), constrained_layout=True)
+
+    glomcell_list1 = ['MC4[0]', 'MC5[0]', 'MC5[4]', 'MC5[14]', 'TC5[0]', 'TC4[0]', 'TC4[6]', 'TC4[8]', 'TC5[18]', 'TC5[20]']
+    glomcell_list2 = ['MC5[2]', 'MC5[6]', 'MC5[8]', 'MC5[10]', 'MC5[12]', 'MC4[2]', 'TC3[0]', 'TC4[2]', 'TC5[2]', 'TC4[4]', 'TC5[4]', 'TC3[2]', 'TC5[6]', 'TC5[8]', 'TC5[10]', 'TC3[4]', 'TC4[10]', 'TC3[6]', 'TC5[12]', 'TC5[14]', 'TC4[12]', 'TC5[16]', 'TC4[14]', 'TC4[16]']
+
+    i = 0
     for cell, t, v in vs:
         if 'MC' in cell:
             col = 'blue'
         if 'TC' in cell:
-            col = 'red'
+            col = 'magenta'
         if 'GC' in cell:
-            col = 'orange'
-            continue # don't plot GCs
+            continue   # don't plot GCs
 
-        ax[0].plot(t,np.array(v)+i,col,label=cell)
-        ax[0].set_ylabel("Voltage")
+        ax[0].plot(t, np.array(v) + i, col, linestyle='-', label=cell)
         i += 100
 
-    i=0
-    spike_events = {}
-    for entry in spike_times:
-        seg_name = entry[0]
-        seg_times = spike_events.get(seg_name,[])
-        spike_events[seg_name] = seg_times + entry[1]
+    events = [(seg, times) for seg, times in events.items()]
+    events.sort(key=lambda row: row[0])
 
-    for seg, times in spike_times:
-        if 'MC4' in seg:
+    for seg, times in events:
+        if 'MC' in seg:
             col = 'b'
-        if 'MC5' in seg:
-            col = 'c'
-        if 'TC3' in seg:
-            col = 'r'
-        if 'TC4' in seg:
+        if 'TC' in seg:
             col = 'm'
-        if 'TC5' in seg:
-            col = 'g'
-        if 'GC' in seg:
-            col = 'k'
+        ax[0].plot(times, [i]*len(times), col+'|', ms=5, label=seg)
 
-        i += 100
+        i += 10
 
-        ax[1].plot(times, [i]*len(times),col+'|',ms=10,label=seg)
-        ax[1].set_ylabel("Spikes")
-        #ax[1].legend()
+    min_t = min(t)
+    max_t = max(t)
 
+    ax[0].set_xticks(np.arange(min_t, max_t + 1, 50.0))
+    ax[0].tick_params(labelsize=12)
+    ax[0].margins(0)
+    ax[0].set_yticks([])
+    ax[0].spines['top'].set_visible(False)
+    ax[0].spines['right'].set_visible(False)
+    ax[0].spines['left'].set_visible(False)
+    ax[0].set_xlabel('Simulation Time [ms]', fontsize=18)
+    ax[0].set_xlim(min_t, max_t)
+
+    t = t_lfp
+
+    ax[1].margins(0)
+    ax[1].plot(t, lfp * 10000 + 200, label='raw', color='black')
+    ax[1].plot(t, lfp_bp_beta * 10000 - 400, label='BP filtered: beta', color='purple')
+    ax[1].plot(t, lfp_bp_gamma * 10000 - 1000, label='BP filtered: gamma', color='orange')
+
+    ax[1].set_xticks(np.arange(min_t, max_t + 1, 50.0))
+    ax[1].tick_params(labelsize=12)
+    ax[1].set_yticks([])
+    ax[1].spines['top'].set_visible(False)
+    ax[1].spines['right'].set_visible(False)
+    ax[1].spines['left'].set_visible(False)
+    ax[1].set_xlabel('Simulation Time [ms]', fontsize=18)
+    ax[1].legend(loc=(0.9, 0.27))
+    ax[1].set_xlim(min_t, max_t)
+
+    colors = cm.get_cmap('Blues', 200)
+    sp = ax[2].contourf(t, frequencies, lfp_wavelet_power, 256, vmin=0, vmax=0.17, cmap=colors)
+
+    ax[2].set_ylim((20, 180))
+    ax[2].set_xticks(np.arange(round(min_t), max_t + 1, 50.0))
+    ax[2].tick_params(labelsize=12)
+    ax[2].set_ylabel('Frequency [Hz]', fontsize=14)
+    ax[2].set_xlabel('Simulation Time [ms]', fontsize=14)
+    ax[2].set_title(f'Spectrogram of LFP Signal (Wavelet Transform)', fontsize=18)
+    ax[2].set_xlim(min_t, max_t)
+
+    fig.colorbar(sp, ax=ax[2], format=tkr.FormatStrFormatter('%.2f')).set_label('LFP Wavelet Power ($V^2/Hz$)')
+
+    plt.savefig(f'{fig_dir}/spikes_spectrogram_{params_filename}.jpg', bbox_inches='tight', dpi=300)
     plt.show()
 
-def get_spiking_cells(spike_times):
-    spiking_cells = []
-    spike_times_clean = []
-    for seg, times in spike_times:
-        if times != []:
-            spiking_cells.append(seg)
-            spike_times_clean.append(times)
-    #for t in range(len(spike_times)):
-    #    print(t)
-        #if spike_times[entry][1] != []:
-        #    spike_times_clean.append(spike_times[t][1])
-
-    return spiking_cells, spike_times_clean
+    fig2, ax2 = plt.subplots(1, 1, figsize=(27, 6))
+    f, t, Zxx, order = get_lfp_fft('GammaSignature_SetupTime', ax2, nperseg=5000, vmax=None, lowcut=0.1, highcut=200, order=5)
 
 
-def get_spikes_hist(spiking_cells, spike_times_clean, cell_name):
+def show_subplot4(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
+
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+
+    fig_width = 27
+    events, vs, spike_times, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+    print("lfp_pkl_file:", lfp_pkl_file)
+
+    if 'dt' in params_dict:
+        dt = params_dict['dt']
+    else:
+        dt = 0.1
+
+    params_list, params_filename = get_params(paramset)
+
+    if params_short:
+        params_title = params_filename
+    else:
+        params_title = params_list
+
+    fig, ax = plt.subplots(3, 1, gridspec_kw={'height_ratios': [3, 1, 1]},
+                           figsize=(fig_width, 30), constrained_layout=True)
+
+    glomcell_list1 = ['MC4[0]', 'MC5[0]', 'MC5[4]', 'MC5[14]', 'TC5[0]', 'TC4[0]', 'TC4[6]', 'TC4[8]', 'TC5[18]', 'TC5[20]']
+    glomcell_list2 = ['MC5[2]', 'MC5[6]', 'MC5[8]', 'MC5[10]', 'MC5[12]', 'MC4[2]', 'TC3[0]', 'TC4[2]', 'TC5[2]', 'TC4[4]', 'TC5[4]', 'TC3[2]', 'TC5[6]', 'TC5[8]', 'TC5[10]', 'TC3[4]', 'TC4[10]', 'TC3[6]', 'TC5[12]', 'TC5[14]', 'TC4[12]', 'TC5[16]', 'TC4[14]', 'TC4[16]']
+
+    i = 0
+    for cell, t, v in vs:
+        if 'MC' in cell:
+            col = 'blue'
+        if 'TC' in cell:
+            col = 'magenta'
+        if 'GC' in cell:
+            continue   # don't plot GCs
+
+        ax[0].plot(t, np.array(v) + i, col, linestyle='-', label=cell)
+        i += 100
+
+    events = [(seg, times) for seg, times in events.items()]
+    events.sort(key=lambda row: row[0])
+
+    for seg, times in events:
+        if 'MC' in seg:
+            col = 'b'
+        if 'TC' in seg:
+            col = 'm'
+        ax[0].plot(times, [i]*len(times), col+'|', ms=5, label=seg)
+
+        i += 10
+
+    min_t = min(t)
+    max_t = max(t)
+
+    ax[0].set_xticks(np.arange(min_t, max_t + 1, 50.0))
+    ax[0].tick_params(labelsize=12)
+    ax[0].margins(0)
+    ax[0].set_yticks([])
+    ax[0].spines['top'].set_visible(False)
+    ax[0].spines['right'].set_visible(False)
+    ax[0].spines['left'].set_visible(False)
+    ax[0].set_xlabel('Simulation Time [ms]', fontsize=18)
+    ax[0].set_xlim(min_t, max_t)
+
+    t = t_lfp
+
+    ax[1].margins(0)
+    ax[1].plot(t, lfp * 10000 + 200, label='raw', color='black')
+    ax[1].plot(t, lfp_bp_beta * 10000 - 400, label='BP filtered: beta', color='purple')
+    ax[1].plot(t, lfp_bp_gamma * 10000 - 1000, label='BP filtered: gamma', color='orange')
+
+    ax[1].set_xticks(np.arange(min_t, max_t + 1, 50.0))
+    ax[1].tick_params(labelsize=12)
+    ax[1].set_yticks([])
+    ax[1].spines['top'].set_visible(False)
+    ax[1].spines['right'].set_visible(False)
+    ax[1].spines['left'].set_visible(False)
+    ax[1].set_xlabel('Simulation Time [ms]', fontsize=18)
+    ax[1].legend(loc=(0.9, 0.27))
+    ax[1].set_xlim(min_t, max_t)
+
+    colors = cm.get_cmap('Blues', 200)
+    sp = ax[2].contourf(t, frequencies, lfp_wavelet_power, 256, vmin=0, vmax=0.17, cmap=colors)
+
+    ax[2].set_ylim((20, 180))
+    ax[2].set_xticks(np.arange(round(min_t), max_t + 1, 50.0))
+    ax[2].tick_params(labelsize=12)
+    ax[2].set_ylabel('Frequency [Hz]', fontsize=14)
+    ax[2].set_xlabel('Simulation Time [ms]', fontsize=14)
+    ax[2].set_title(f'Spectrogram of LFP Signal (Wavelet Transform)', fontsize=18)
+    ax[2].set_xlim(min_t, max_t)
+
+    fig.colorbar(sp, ax=ax[2], format=tkr.FormatStrFormatter('%.2f')).set_label('LFP Wavelet Power ($V^2/Hz$)')
+
+    plt.savefig(f'{fig_dir}/spikes_spectrogram_{params_filename}.jpg', bbox_inches='tight', dpi=300)
+    plt.show()
+
+    fig2, ax2 = plt.subplots(1, 1, figsize=(27, 6))
+    f, t, Zxx, order = get_lfp_fft('GammaSignature_SetupTime', ax2, nperseg=5000, vmax=None, lowcut=0.1, highcut=200, order=5)
+
+
+
+def get_spikes_hist(spiking_cells, spike_times_clean, cell_type, bins=50):
+    spike_list_clean = list(zip(spiking_cells, spike_times_clean))
+    all_times = []
+
+    for seg, times in spike_list_clean:
+        if cell_type in seg:
+            all_times.extend(times)
+    
+    print(f"Number of spiking cells: {len(spiking_cells)}")
+    print(f"Total number of spikes: {len(spike_times_clean)}")
+    print(f"Processing cell type: {cell_type}")
+    
+    all_times = np.array(all_times)
+    bins = bins
+    y, binedges = np.histogram(all_times, bins=bins)
+    bincenters = 0.5 * (binedges[1:] + binedges[:-1])
+    binsize = bincenters[1] - bincenters[0]
+    rates = y / binsize
+
+    return bincenters, rates
+
+
+def plot_spikes_hist(ax, bincenters, rates, col='b'):
+    ax.plot(bincenters, rates, color=col)
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Rate')
+
+
+def get_spikes_hist2(spiking_cells, spike_times_clean, cell_type, bins=50):
     spike_list_clean = list(zip(spiking_cells, spike_times_clean))
 
     for seg, times in spike_list_clean:
 
-        if cell_name in seg:
+        if cell_type in seg:
             times = np.array(times)
-            #bins = math.ceil((times.max() - times.min())/0.23)  # want ~1000 bins
-            bins = 150
             y, binedges = np.histogram(times, bins=bins)  # returns the right edge of the bins
             bincenters = 0.5*(binedges[1:]+binedges[:-1])  # better to use the center of the bins
             binsize = bincenters[1] - bincenters[0]  # calculate the width of the bins
@@ -630,11 +1052,12 @@ def get_spikes_hist(spiking_cells, spike_times_clean, cell_name):
     return bincenters, rates
 
 
-def plot_spikes_hist(bincenters, rates, col='b'):
 
-    #bincenters, rates = get_spikes_hist(cell_name)
+def plot_spikes_hist_(bincenters, rates, col='b'):
 
-    fig, ax = plt.subplots(1, 1, figsize=(20,6))
+    bincenters, rates = get_spikes_hist(cell_name)
+
+    fig, ax = plt.subplots(1, 1, figsize=(27,6))
 
     ax.plot(bincenters, rates, color=col)
     #ax.set_xlim(0, 50)
@@ -646,7 +1069,7 @@ def plot_spikes_hist(bincenters, rates, col='b'):
 
 
 def show_psth(spiking_cells, spike_times_clean):
-    fig, ax = plt.subplots(3,1, figsize=(20,20))
+    fig, ax = plt.subplots(3,1, figsize=(27,6))
     spiking_mcs = []
     spiking_tcs = []
     spiking_gcs = []
@@ -659,7 +1082,7 @@ def show_psth(spiking_cells, spike_times_clean):
             spiking_mcs.append(cell)
         if 'TC' in cell:
             idx = 1
-            col = 'red'
+            col = 'magenta'
             spiking_tcs.append(cell)
         if 'GC' in cell:
             idx = 2
@@ -669,7 +1092,7 @@ def show_psth(spiking_cells, spike_times_clean):
         ax[idx].plot(bincenters, rates, color=col)
 
         #plt.plot(times, [i]*len(times),col+'|',ms=10,label=seg)
-        ax[idx].set_ylabel("Spike Histogram")
+        ax[idx].set_ylabel("%s Spike Histogram" % cell)
         ax[idx].set_title(cell[:2])
 
     plt.tight_layout()
@@ -677,52 +1100,34 @@ def show_psth(spiking_cells, spike_times_clean):
     return spiking_mcs, spiking_tcs, spiking_gcs
 
 
-
-def plot_psth(spiking_cells, spike_times_clean):
-    fig, ax = plt.subplots(3, 1, figsize=(20, 20))
-    spiking_mcs = []
-    spiking_tcs = []
-    spiking_gcs = []
-
+def plot_psth(spiking_cells, spike_times_clean, cell_types=['MC', 'TC', 'GC']):
+    fig, ax = plt.subplots(3, 1, figsize=(27, 6))
+    
     # Dictionary to store aggregated histograms for each cell type
-    aggregated_histograms = {'MC': [], 'TC': [], 'GC': []}
+    aggregated_histograms = {cell_type: [] for cell_type in cell_types}
+    spiking_cells_dict = {cell_type: [] for cell_type in cell_types}
+    colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
 
     for cell in spiking_cells:
         bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, cell)
-        if 'MC' in cell:
-            spiking_mcs.append(cell)
-            aggregated_histograms['MC'].append(rates)  # Append rates for MC cells
-        elif 'TC' in cell:
-            spiking_tcs.append(cell)
-            aggregated_histograms['TC'].append(rates)  # Append rates for TC cells
-        elif 'GC' in cell:
-            spiking_gcs.append(cell)
-            aggregated_histograms['GC'].append(rates)  # Append rates for GC cells
+        for cell_type in cell_types:
+            if cell_type in cell:
+                spiking_cells_dict[cell_type].append(cell)
+                aggregated_histograms[cell_type].append(rates)
+                break
 
-    # Plot aggregated histograms for MC cells
-    if aggregated_histograms['MC']:
-        mean_rates_mc = np.mean(aggregated_histograms['MC'], axis=0)
-        ax[0].plot(bincenters, mean_rates_mc, color='blue', linewidth=2)
-        ax[0].set_ylabel("Spike Histogram")
-        ax[0].set_title("MC Histograms")
-
-    # Plot aggregated histograms for TC cells
-    if aggregated_histograms['TC']:
-        mean_rates_tc = np.mean(aggregated_histograms['TC'], axis=0)
-        ax[1].plot(bincenters, mean_rates_tc, color='red', linewidth=2)
-        ax[1].set_ylabel("Spike Histogram")
-        ax[1].set_title("TC Histograms")
-
-    # Plot aggregated histograms for GC cells
-    if aggregated_histograms['GC']:
-        mean_rates_gc = np.mean(aggregated_histograms['GC'], axis=0)
-        ax[2].plot(bincenters, mean_rates_gc, color='orange', linewidth=2)
-        ax[2].set_ylabel("Spike Histogram")
-        ax[2].set_title("GC Histograms")
+    for idx, cell_type in enumerate(cell_types):
+        if aggregated_histograms[cell_type]:
+            mean_rates = np.mean(aggregated_histograms[cell_type], axis=0)
+            ax[idx].plot(bincenters, mean_rates, color=colors[cell_type], linewidth=2)
+            ax[idx].set_ylabel(f"{cell_type} Spike Histogram")
+            ax[idx].set_title(f"{cell_type} Histograms")
 
     plt.tight_layout()
     plt.show()
-    return spiking_mcs, spiking_tcs, spiking_gcs
+    
+    return tuple(spiking_cells_dict[cell_type] for cell_type in cell_types)
+
 
 
 def plot_lfp_signal(t_lfp, lfp, x_min=1200, x_max=1300):   # x_min and x_max set the time range (ms)
@@ -794,7 +1199,7 @@ def plot_lfp_power_psd(t_lfp, lfp, paramset, NFFT = 150):
     plt.show()
 
 
-def filter_and_transform_lfp(lfp, fs, lowcut=0.1, highcut=200):
+def filter_and_transform_lfp(lfp, fs, nperseg, lowcut, highcut, order):
     """
     Filters the LFP signal between lowcut and highcut, then applies STFT.
     
@@ -809,7 +1214,9 @@ def filter_and_transform_lfp(lfp, fs, lowcut=0.1, highcut=200):
     t (array): Array of segment times.
     Zxx (2D array): STFT of lfp signal.
     """
+    
     # Ensure that the filter cut-off frequencies are within the valid range
+
     nyquist = fs / 2
     low = lowcut / nyquist
     high = highcut / nyquist
@@ -818,16 +1225,16 @@ def filter_and_transform_lfp(lfp, fs, lowcut=0.1, highcut=200):
         raise ValueError(f"Invalid filter frequencies: low={lowcut}, high={highcut}, nyquist={nyquist}")
     
     # Design a bandpass filter
-    sos = butter(10, [low, high], btype='bandpass', output='sos')
+    sos = butter(order, [low, high], btype='bandpass', output='sos')
     filtered_lfp = sosfilt(sos, lfp)
     
     # Compute the Short-Time Fourier Transform (STFT)
-    f, t, Zxx = stft(filtered_lfp, fs, nperseg=256)
+    f, t, Zxx = stft(filtered_lfp, fs, nperseg=nperseg)
     
     return f, t, Zxx
 
 
-def plot_spectrogram(f, t, Zxx):
+def plot_spectrogram(ax, f, t, Zxx, vmax, nperseg, order):
     """
     Plots the spectrogram of the LFP signal.
     
@@ -836,46 +1243,87 @@ def plot_spectrogram(f, t, Zxx):
     t (array): Array of segment times.
     Zxx (2D array): STFT of lfp signal.
     """
-    plt.figure(figsize=(10, 6))
-    plt.pcolormesh(t, f, np.abs(Zxx), shading='gouraud')
-    plt.colorbar(label='Intensity')
-    plt.title('Spectrogram of LFP Signal')
-    plt.ylabel('Frequency [Hz]')
-    plt.xlabel('Time [sec]')
-    plt.ylim([0, 200])
-    plt.show()
+    
+    #plt.figure(figsize=(27, 6))
+    colors = cm.get_cmap('Blues', 200)
+    cax = ax.pcolormesh(t, f, np.abs(Zxx), shading='gouraud', vmax=vmax, cmap=colors)
+    ## Add colorbar
+    cbar = plt.colorbar(cax, ax=ax)
+    cbar.set_label('LFP Wavelet Power ($V^2/Hz$)')
+
+    #plt.title('Spectrogram of LFP Signal (STFT)', fontsize=18)
+    ax.set_title(f'Spectrogram of LFP Signal (STFT), seg length = {nperseg} pts, order = {order}', fontsize=14)
+    ax.set_ylabel('Frequency [Hz]', fontsize=14)
+    ax.set_xlabel('Time [sec]', fontsize=14)
+    ax.set_ylim([0, 200])
+    
+    return cax
 
 
-def get_lfp_fft(paramset):
-    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
-        params_dict = yaml.load(f, Loader=yaml.FullLoader)
 
-    dt = params_dict['dt']    # in ms
-    dt_in_sec = dt * 0.001    # dt in ms to seconds
-    sniff_count = params_dict['sniff_count']
-
+def get_lfp_fft(paramset, ax, vmax, nperseg, lowcut=30, highcut=80, order=5):
+    """
+    Perform filtering and STFT transformation on LFP data and plot the spectrogram.
+    
+    Parameters:
+    paramset (str): Identifier for the data set to load.
+    ax (matplotlib.axes.Axes): Axes object to plot on.
+    nperseg (int): Length of each segment for STFT.
+    vmax (float): Maximum value for color scaling in spectrogram.
+    lowcut (float): Lower cutoff frequency for bandpass filter.
+    highcut (float): Upper cutoff frequency for bandpass filter.
+     order (int): Order of the filter used.
+    
+    Returns:
+    f (array): Array of sample frequencies.
+    t (array): Array of segment times.
+    Zxx (2D array): STFT of lfp signal.
+   
+    """
+    
+    # Load necessary data
     events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
     frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
-
+    
+    # Check that the variable dt matches time increments in t_lfp
+    assert dt == (t_lfp[1] - t_lfp[0])
+    dt_in_sec = dt * 0.001  # dt in ms to seconds
+    
     fs = 1 / dt_in_sec  # Sampling frequency in Hz
-
-    # Print statements to debug
-    print(f"Sampling frequency (fs): {fs} Hz")
-    print(f"Length of LFP data: {len(lfp)}")
-    print(f"First 5 values of LFP data: {lfp[:5]}")
     
     # Filter and transform the LFP data
-    f, t, Zxx = filter_and_transform_lfp(lfp, fs)
+    f, t, Zxx = filter_and_transform_lfp(lfp, fs, nperseg=nperseg, lowcut=lowcut, highcut=highcut, order=order)
     
-    # Debugging outputs for the filtered and transformed data
-    print(f"Shape of STFT result Zxx: {Zxx.shape}")
-    print(f"First 5 frequency bins: {f[:5]}")
-    print(f"First 5 time bins: {t[:5]}")
-
     # Plot the spectrogram
-    plot_spectrogram(f, t, Zxx)
+    plot_spectrogram(ax, f, t, Zxx, vmax=vmax, nperseg=nperseg, order=order)
+    
+    # Return the necessary values for further analysis if needed
+    return f, t, Zxx, order
 
+
+def get_lfp_fft_stacked(paramset, order, nperseg_vmax_dict, lowcut=30, highcut=80):
+    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+    frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+    
+    assert dt == (t_lfp[1] - t_lfp[0])
+    dt_in_sec = dt * 0.001
+    fs = 1 / dt_in_sec
+
+    fig, axes = plt.subplots(len(nperseg_vmax_dict), 1, figsize=(10, 3 * len(nperseg_vmax_dict)), constrained_layout=True)
+    
+    if len(nperseg_vmax_dict) == 1:
+        axes = [axes]
+    
+    for i, (nperseg, vmax) in enumerate(nperseg_vmax_dict.items()):
+        ax = axes[i]
+        f, t, Zxx, order = filter_and_transform_lfp(lfp, fs, nperseg=nperseg, lowcut=lowcut, highcut=highcut, order=order)
+        vmax_value = vmax if vmax else np.max(np.abs(Zxx))
+        cax = plot_spectrogram(ax, f, t, Zxx, vmax=vmax_value, nperseg=nperseg, order=order)
+        fig.colorbar(cax, ax=ax, label='LFP Wavelet Power ($V^2/Hz$)')
+    
+    plt.tight_layout()
+    plt.subplots_adjust(hspace=0.5)  # Adjust vertical space between plots
+    plt.show()
 
 
 def plot_lfp_fft(faxis, Sxx):
@@ -893,11 +1341,12 @@ def plot_lfp_spectrogram(t_lfp, faxis, Sxx):
     # Create a meshgrid of time and frequency values
     t_mesh, f_mesh = np.meshgrid(t_lfp, faxis)
 
+    colors = cm.get_cmap('Blues', 200)
     # Plot the spectrogram
-    plt.pcolormesh(t_mesh, f_mesh, Sxx, cmap='jet')  # Transpose Sxx
+    plt.pcolormesh(t_mesh, f_mesh, Sxx, vmax=vmax, cmap=colors)  # Transpose Sxx
     plt.colorbar()
-    plt.xlabel('Time [s]')
-    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [s]', fontsize=14)
+    plt.ylabel('Frequency [Hz]', fontsize=14)
     plt.show()
 
     #plt.set_ylim((20,180))
@@ -934,7 +1383,7 @@ def plot_lfp_power_welch(paramset, default = "GammaSignature_SetupTime"):
     plt.ylim([10e-9,10e-6])
     plt.xticks(fontsize=16)
     plt.yticks(fontsize=16)
-    plt.xlabel('frequency [Hz]', fontsize=18)
+    plt.xlabel('Frequency [Hz]', fontsize=18)
     plt.ylabel('PSD [mV**2/Hz]', fontsize=18)
     plt.axvline(x = 130, color = 'gray', linestyle='dashed')
     plt.axvline(x = 180, color = 'gray', linestyle='dashed')
@@ -1059,9 +1508,9 @@ def plot_STFT(t_lfp, lfp):
     f, t, Z = signal.stft(lfp, fs=10000)    # Z is the STFT of the lfp
     plt.axis([t_lfp[0]*0.001, t_lfp[-1]*0.001, 0, 200])   # *0.001 to convert ms to seconds
     plt.pcolormesh(t, f, np.abs(Z), vmin=0,vmax=0.025, shading='gouraud')
-    plt.title('STFT Magnitude')
-    plt.ylabel('Frequency [Hz]')
-    plt.xlabel('Time [sec]')
+    plt.title('STFT Magnitude', fontsize=18)
+    plt.ylabel('Frequency [Hz]', fontsize=18)
+    plt.xlabel('Time [sec]', fontsize=18)
     plt.show()
 
 
