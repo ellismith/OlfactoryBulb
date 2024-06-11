@@ -60,6 +60,7 @@ class OlfactoryBulb:
         self.mpimap = {}
         self.nranks = int(self.pc.nhost())
         self.mpirank = self.pc.id()
+        #print(self.mpirank)
 
         # Keep track of rank complexities with a min-heap
         self.rank_complexities = [(0, r) for r in range(self.nranks)]
@@ -116,22 +117,32 @@ class OlfactoryBulb:
             time += params.sim_setup_time
             self.add_inputs(odor=odor_info["name"], t=time, rel_conc=odor_info["rel_conc"])
 
-            # TODO: add conditional nmda block
-            # if time in params.odors_for_block:
-            #     params.synapse_properties['AmpaNmdaSyn']['nmdatoggle'] = 0
-            # else:
-            #     params.synapse_properties['AmpaNmdaSyn']['nmdatoggle'] = 1
+        #self.add_background_input()
+        
 
+        #for cell_model in self.cells["MC"]:
+        #    print("Adding background input for cell:", cell_model)
+        #    assert hasattr(cell_model, 'soma'), "Neuron does not have a soma segment."
+        #    self.add_background_input2(cell_model)
+        #except Exception as e:
+            #print("An error occurred while adding background input:", e)
         
         # LFP
         self.electrode = self.create_lfp_electrode(*params.lfp_electrode_location,
                                                    sampling_period=params.recording_period)
+        self.electrode2 = self.create_lfp_electrode(*params.lfp_electrode_location2,
+                                                   sampling_period=params.recording_period)
+
 
         self.setup_status_reporter()
 
         # TODO: add background input here
-        for cell_type, cells in self.cells.items():
-            self.add_background_input(cells)
+        #for cell_type, cells in self.cells.items():
+        
+        
+            #else:
+                #pass
+                
 
         for cell_type in params.record_from_somas:
             self.record_from_somas(cell_type)
@@ -144,13 +155,16 @@ class OlfactoryBulb:
             h.newPlotI()
             [g for g in h.Graph][-1].addvar('LfpElectrode[0].value')
 
+        # Ensure results directory is always initialized
+        self.results_dir = os.path.join('results', params.name)
 
         if autorun:
+            
             self.run(params.tstop)
 
             
             if self.mpirank == 0:
-                self.results_dir = os.path.join('results', params.name)
+                #self.results_dir = os.path.join('results', params.name)
                 if not os.path.exists(self.results_dir):
                     os.makedirs(self.results_dir)
 
@@ -174,13 +188,16 @@ class OlfactoryBulb:
                            'background_current': params.background_current,
                            'sniff_rate': params.sniff_rate,
                            'dt': params.sim_dt,
-                           'sniff_count': params.sniff_count}
+                           'sniff_count': params.sniff_count,
+                           'electrode_location': params.lfp_electrode_location,
+                           'electrode_location2': params.lfp_electrode_location2
+                           }
             
             with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
                 yaml.dump(params_dict, outfile, default_flow_style=False)
 
             if self.mpirank == 0:
-                t, lfp = self.get_lfp()
+                t, lfp, t2, lfp2 = self.get_lfp()
 
             # Cleanup on MPI
             if self.nranks > 1:
@@ -230,6 +247,7 @@ class OlfactoryBulb:
 
             # Create synapse point process
             seg = eval(seg_name.replace('(1)', '(.999)'))
+            #print("seg:", seg)  # seg: TC5[0].apic[1](0.999)
             syn = h.Exp2Syn(seg)
             syn.tau1 = self.params.input_syn_tau1
             syn.tau2 = self.params.input_syn_tau2
@@ -293,6 +311,7 @@ class OlfactoryBulb:
         if self.nranks == 1:
             h.cvode_active(0)
             h.cvode.cache_efficient(1)
+            
             h.run()
 
         else:
@@ -303,6 +322,14 @@ class OlfactoryBulb:
             self.pc.set_maxstep(1)
             h.stdinit()
             self.pc.psolve(h.tstop)
+
+        #except Exception as e:
+        #    if "mpiexec" in str(e).lower() and "non-zero exit code" in str(e).lower():
+        #        if self.mpirank == 0:
+        #            print("MPI execution encountered an error. Attempting to run NEURON simulation locally...")
+        #        h.run()
+        #    else:
+        #        raise e
 
         # Clear status updater line
         if self.mpirank == 0:
@@ -347,7 +374,7 @@ class OlfactoryBulb:
         :param method: One of 'Line', 'Point', or 'RC'.
         :return: an LFPsimpy LfpElectrode object
         """
-
+        print("electrode location:", x, y, z)
         return LfpElectrode(x, y, z, sampling_period, method)
 
     def get_lfp(self):
@@ -363,10 +390,16 @@ class OlfactoryBulb:
         t = self.electrode.times
         lfp = self.electrode.values
 
+        t2 = self.electrode2.times
+        lfp2 = self.electrode2.values
+
         with open(os.path.join(self.results_dir, 'lfp.pkl'), 'wb') as f:
             cPickle.dump((t, lfp), f)
 
-        return t, lfp
+        with open(os.path.join(self.results_dir, f'lfp_{self.params.lfp_electrode_location2}.pkl'), 'wb') as f2:
+            cPickle.dump((t2, lfp2), f2)
+
+        return t, lfp, t2, lfp2
 
     def get_model_inputsegs(self):
         """
@@ -381,13 +414,13 @@ class OlfactoryBulb:
         for cells in self.glom_cells.values():
             for cell in cells:
                 input_models.add(cell[:cell.find('[')])
+        #print("input_models:", input_models) {'TC5', 'MC5', 'MC4', 'TC4', 'TC3'}
 
         # Get each model's input segments (in the tuft)
         model_inputsegs = {m.class_name: m.tufted_dend_root
                            for m in CellModel \
                                .select(CellModel.class_name, CellModel.tufted_dend_root) \
                                .where(CellModel.class_name.in_(list(input_models)))}
-
         return model_inputsegs
 
     def add_gap_junctions(self, in_name, g_gap):
@@ -537,6 +570,7 @@ class OlfactoryBulb:
             if len(input_segs) > 0:
                 glom_intensity = glom_intensities[glom_id] * rel_conc
                 self.stim_glom_segments(t, input_segs, glom_intensity)
+                
 
     def load_glom_cells(self):
         """
@@ -635,21 +669,41 @@ class OlfactoryBulb:
         self.bn_server.init_mpi(self.pc, self.mpimap)
         self.bn_server.update_groups([group_dict])
 
-    def add_background_input(self, cells):
+    def add_background_input(self):
+        h = self.h
+        for cell_type, cells in self.cells.items():
+            print(f'Checking cell type: "{cell_type}"')
+        
+            # Use a stricter check for "TC" (e.g., exact match, or lowercasing both sides)
+            if cell_type.strip() == "TC":
+                for cell in cells:
+                    print("injecting current to cell:", cell)
+                    assert hasattr(cell, 'soma'), "Neuron does not have a soma segment."
+                    print(f'injecting current to {cell}')  # cell.cell
+                    stim = h.IClamp(0.5, sec=cell.soma)
+                    stim.delay = self.params.sim_setup_time
+                    print("stim.delay:", stim.delay)
+                    stim.dur = 1750 # self.params.tstop - self.params.sim_setup_time
+                    print("stim.dur:", stim.dur)
+                    stim.amp = self.params.background_current
+                    print("stim.amp:", stim.amp)
+
+
+    def add_background_input2(self, cell):
         """
         Adds a small injected current to the soma of all cells for the duration of simulation
-
-        :param cell_type: One of 'MC', 'GC', 'TC'
         """
 
         h = self.h
 
-        for cell in cells:
-            # print(f'injecting current to {cell.cell}')
-            stim = h.IClamp(0.5, sec=cell.soma)
-            stim.delay = self.params.sim_setup_time
-            stim.dur = self.params.tstop - self.params.sim_setup_time
-            stim.amp = self.params.background_current
+        print(f'injecting current to {cell}')  # cell.cell
+        stim = h.IClamp(0.5, sec=cell.soma)
+        stim.delay = self.params.sim_setup_time
+        print("stim.delay:", stim.delay)
+        stim.dur = self.params.tstop - self.params.sim_setup_time
+        print("stim.dur:", stim.dur)
+        stim.amp = self.params.background_current
+        print(stim.amp)
 
     def record_from_somas(self, cell_type):
         """
@@ -661,6 +715,7 @@ class OlfactoryBulb:
         h = self.h
 
         for cell_model in self.cells[cell_type]:
+            #print("soma recorded cell:", cell_model)
             v_vec = h.Vector()
             v_vec.record(cell_model.soma(0.5)._ref_v, self.params.recording_period)
             self.v_vectors[str(cell_model.soma)] = v_vec
