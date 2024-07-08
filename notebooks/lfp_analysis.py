@@ -685,9 +685,9 @@ def plot_spikes_hist_(bincenters, rates, col='b'):
 def calculate_sta(spike_times, lfp, win=50, dt=0.1):
     N = len(lfp)  # Length of the LFP signal
     
-    # Generate interpolated time points and LFP signal (replace with your actual interpolation function)
+    # Generate interpolated time points and LFP signal 
     interp_time_points = np.arange(N) * dt
-    interp_lfp = lfp  # Replace with your actual interpolated LFP data
+    interp_lfp = lfp 
     
     # Initialize STA to hold the average LFP around each spike
     num_points = int((2 * win + 1) / dt)  # Calculate the number of points in the window
