@@ -47,6 +47,7 @@ class OlfactoryBulb:
         self.slice_dir = os.path.abspath(os.path.join(params.slice_dir, params.slice_name))
         self.cells = {}
         self.inputs = []
+        self.electrode_locations = []
 
         self.gj_source_gids = set()
         self.gjs = []
@@ -130,8 +131,16 @@ class OlfactoryBulb:
         # LFP
         self.electrode = self.create_lfp_electrode(*params.lfp_electrode_location,
                                                    sampling_period=params.recording_period)
-        self.electrode2 = self.create_lfp_electrode(*params.lfp_electrode_location2,
+        
+        self.electrodes = self.create_multichannel_probe(*params.lfp_electrode_location,
+                                                         n_electrodes=params.n_electrodes,
+                                                         spacing=params.spacing,
                                                    sampling_period=params.recording_period)
+   
+        
+
+        # Example call to save LFP data for each electrode on the multichannel probe
+        #self.lfp_data = self.get_multichannel_lfp()
 
 
         self.setup_status_reporter()
@@ -190,14 +199,31 @@ class OlfactoryBulb:
                            'dt': params.sim_dt,
                            'sniff_count': params.sniff_count,
                            'electrode_location': params.lfp_electrode_location,
-                           'electrode_location2': params.lfp_electrode_location2
+                           'multichannel': params.multichannel,
+                           'probe_x': params.x,
+                           'probe_y': params.y,
+                           'probe_z': params.z_start,
+                           'probe_n_electrodes': params.n_electrodes, 
+                            'probe_spacing': params.spacing
                            }
             
             with open(os.path.join(self.results_dir,'params.yml'), 'w') as outfile:
                 yaml.dump(params_dict, outfile, default_flow_style=False)
 
+            print("self.params.multichannel", self.params.multichannel)
             if self.mpirank == 0:
-                t, lfp, t2, lfp2 = self.get_lfp()
+                if self.params.multichannel:
+                    print("multichannel:", self.params.multichannel)
+                    lfp_data = self.get_multichannel_lfp()
+                    
+
+                    # Example of how to process and print the LFP data for each electrode
+                    for idx, (t, lfp) in enumerate(lfp_data):
+                        print(f"Electrode {idx + 1}:\nTime: {t}\nLFP: {lfp}\n")
+                else:
+                    # single electrode setup
+                    t, lfp = self.get_lfp()
+                    print(f"Single Electrode:\nTime: {t}\nLFP: {lfp}\n")
 
             # Cleanup on MPI
             if self.nranks > 1:
@@ -376,6 +402,31 @@ class OlfactoryBulb:
         """
         print("electrode location:", x, y, z)
         return LfpElectrode(x, y, z, sampling_period, method)
+        
+
+    def create_multichannel_probe(self, x, y, z_start, sampling_period, n_electrodes, spacing, method='Point'):
+        """
+        Uses the LFPsimpy package to add an LFP electrode array with specified spacing along the z-axis.
+
+        :param x: x coordinate in um
+        :param y: y coordinate in um
+        :param z_start: starting z coordinate in um
+        :param n_electrodes: number of electrodes
+        :param spacing: spacing between electrodes in um
+        :param method: one of 'Line', 'Point', or 'RC'
+        :return: list of LFPsimpy LfpElectrode objects
+        """
+        electrodes = []
+        for i in range(n_electrodes):
+            z = z_start + i * spacing
+            location = (x, y, z)
+            self.electrode_locations.append(location)
+            print(f"Electrode {i+1} location: {location}")
+            electrode = LfpElectrode(x, y, z, sampling_period, method)
+            
+            electrodes.append(electrode)
+        return electrodes
+
 
     def get_lfp(self):
         """
@@ -384,22 +435,47 @@ class OlfactoryBulb:
         :return: a tuple of LFP times, and voltages (nV)
         """
 
-        if self.electrode is None or not any(self.electrode.times):
-            raise Exception('Run simulation first to get the LFP')
+        #if self.electrode is None or not any(self.electrode.times):
+        #    raise Exception('Run simulation first to get the LFP')
 
         t = self.electrode.times
         lfp = self.electrode.values
 
-        t2 = self.electrode2.times
-        lfp2 = self.electrode2.values
 
         with open(os.path.join(self.results_dir, 'lfp.pkl'), 'wb') as f:
             cPickle.dump((t, lfp), f)
 
-        with open(os.path.join(self.results_dir, f'lfp_{self.params.lfp_electrode_location2}.pkl'), 'wb') as f2:
-            cPickle.dump((t2, lfp2), f2)
+        return t, lfp
+    
 
-        return t, lfp, t2, lfp2
+    def get_multichannel_lfp(self):
+        """
+        Returns and saves the LFP signals in nV for each electrode in the multichannel probe.
+
+        :return: a list of tuples, each containing LFP times and voltages (nV) for each electrode
+        """
+        #if not self.electrodes:
+        #    raise Exception('Run simulation first to get the LFP')
+
+        lfp_data = []
+
+        for idx, electrode in enumerate(self.electrodes):
+            #if electrode is None or not any(electrode.times):
+            #    raise Exception(f'Run simulation first to get the LFP for electrode {idx + 1}')
+
+            t = electrode.times
+            lfp = electrode.values
+
+            filename = os.path.join(self.results_dir, f'lfp_electrode_{idx + 1}.pkl')
+            with open(filename, 'wb') as f:
+                cPickle.dump((t, lfp), f)
+
+            lfp_data.append((t, lfp))
+
+
+
+        return lfp_data
+
 
     def get_model_inputsegs(self):
         """
@@ -720,7 +796,7 @@ class OlfactoryBulb:
             v_vec.record(cell_model.soma(0.5)._ref_v, self.params.recording_period)
             self.v_vectors[str(cell_model.soma)] = v_vec
 
-            # use NetCon to record spikes from voltage traces passing threshold = 0mV
+            # use NetCon to record spikes from voltage traces passing threxld = 0mV
             # when source ref v passes threshold time t-delay, target receives event at time t
             spike_vec = h.Vector()
             nc = h.NetCon(cell_model.soma(0.5)._ref_v, None, sec=cell_model.soma)
