@@ -98,6 +98,15 @@ class SilentNetwork:
     # 2.5 mm from the skull surface
     lfp_electrode_location = [116, 1078, -61]
 
+    # Define parameters for the multichannel probe
+    multichannel = False 
+    x = 116
+    y = 1078
+    z_start = -1061
+    n_electrodes = 10  
+    spacing = 100  # Spacing between electrodes in micrometers
+
+
     record_from_somas = ['MC', 'TC', 'GC']
 
 
