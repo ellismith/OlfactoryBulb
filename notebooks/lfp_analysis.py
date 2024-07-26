@@ -13,13 +13,15 @@ import yaml
 from pylab import * 
 from scipy import signal
 from scipy.interpolate import interp1d
-from scipy.signal import butter, lfilter, spectrogram, sosfilt, stft
+from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
 #from scipy.signal import ShortTimeFFT
 import math
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 import matplotlib.ticker as tkr
 import pandas as pd
+from collections import defaultdict
+
 
 
 def interpolate(x, y, dt):
@@ -105,7 +107,12 @@ def get_params(paramset):
     max_firing_rate = params_dict['max_firing_rate']
     sniff_rate = params_dict['sniff_rate']
     electrode_location = params_dict['electrode_location']
-    electrode_location2 = params_dict['electrode_location2']
+    probe_x = params_dict['probe_x']
+    probe_y = params_dict['probe_y']
+    probe_z = params_dict['probe_z']
+    probe_n_electrodes = params_dict['probe_n_electrodes']
+    probe_spacing = params_dict['probe_spacing']
+    #electrode_location2 = params_dict['electrode_location2']
     if 'dt' in params_dict:
         dt = params_dict['dt']
     else:
@@ -125,7 +132,8 @@ def get_params(paramset):
     params_list = f'setup_time={setup_time}, gaba_gmax={gaba_gmax}, gaba_tau1={gaba_tau1}, gaba_tau2={gaba_tau2}, mc_input_weight={mc_input_weight}, '\
                   f'tc_input_weight={tc_input_weight},\n mc_gap_junction_gmax={mc_gap_junction_gmax}, tc_gap_junction_gmax={tc_gap_junction_gmax}, '\
                   f'nmda_toggle={nmda_toggle}, ampa_nmda_gmax={ampa_nmda_gmax}, max_firing_rate={max_firing_rate}, sniff_rate={sniff_rate}, '\
-                  f'dt={dt}, sniff_count={sniff_count}, background_current={background_current}, electrode_location={electrode_location}, electrode_location2={electrode_location2}'
+                  f'dt={dt}, sniff_count={sniff_count}, background_current={background_current}, electrode_location={electrode_location}, '\
+                  f'probe_x={probe_x}, probe_y={probe_y}, probe_z={probe_z}, probe_n_electrodes={probe_n_electrodes}, probe_spacing={probe_spacing}'
 
     params_filename = ''
 
@@ -171,7 +179,8 @@ def get_params(paramset):
         params_filename = f'dt={dt}'  
     elif 'sniff_count' in paramset.lower():
         params_filename = f'sniff_count={sniff_count}' 
-    
+    elif 'probe' in paramset.lower():
+        params_filename = f'probe_location_start={probe_x},{probe_y},{probe_z}' 
     else:
         params_filename = 'default'
 
@@ -287,7 +296,7 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, params
     if show:
         plt.subplots(figsize=(4, 5))
 
-    colors = cm.get_cmap('Blues', 200)
+    colors = cm.get_cmap('jet', 200)
     plt.contourf(t_average, frequencies, lfp_wavelet_power_average, 256, \
                  vmin = 0, vmax = 0.1, cmap=colors)
     plt.xlim((0,200))
@@ -407,6 +416,123 @@ def get_spiking_cells(spike_times):
 
     return spiking_cells, spike_times_clean
 
+
+def get_proportion_spiking(spike_times):
+    from collections import defaultdict
+
+    # Initialize dictionaries to track cell type counts and spiking cells
+    cell_type_counts = defaultdict(int)
+    spiking_cells = defaultdict(int)
+    
+    # Iterate through the spike_times to count spiking and total cells
+    for seg, times in spike_times:
+        cell_type = seg[:3]
+        cell_type_counts[cell_type] += 1
+        if times:  # Check if there are any spikes
+            spiking_cells[cell_type] += 1
+
+    # Calculate proportions of spiking cells
+    proportions = {}
+    for cell_type in cell_type_counts:
+        total_cells = cell_type_counts[cell_type]
+        spiking_cells_count = spiking_cells.get(cell_type, 0)
+        proportion_spiking = spiking_cells_count / total_cells
+        proportions[cell_type] = proportion_spiking
+
+    return proportions
+
+
+def get_proportion_spiking2(spike_times):
+
+    # Initialize dictionaries to track cell type counts and spiking cells
+    cell_type_counts = defaultdict(int)
+    spiking_cells = defaultdict(int)
+    
+    # Iterate through the spike_times to count spiking and total cells
+    for seg, times in spike_times:
+        # Determine main group (MC, TC, GC)
+        if 'MC' in seg:
+            main_group = 'MC'
+        elif 'TC' in seg:
+            main_group = 'TC'
+        elif 'GC' in seg:
+            main_group = 'GC'
+        else:
+            continue  # Skip unknown types
+
+        cell_type_counts[main_group] += 1
+        if times:  # Check if there are any spikes
+            spiking_cells[main_group] += 1
+
+    # Calculate proportions of spiking cells for each group
+    proportions = {}
+    for group in ['MC', 'TC', 'GC']:
+        total_cells = cell_type_counts[group]
+        spiking_cells_count = spiking_cells.get(group, 0)
+        proportion_spiking = spiking_cells_count / total_cells
+        proportions[group] = proportion_spiking
+
+    return proportions
+
+
+def plot_proportion_spiking(proportions):
+
+    # Determine if the dictionary contains detailed or aggregated data
+    if any(len(key) > 3 for key in proportions):
+        # Compute average proportions for main groups (MC, TC, GC)
+        avg_proportions = {}
+        for key, proportion in proportions.items():
+            main_group = key[:3]
+            if main_group not in avg_proportions:
+                avg_proportions[main_group] = [proportion, 1]
+            else:
+                avg_proportions[main_group][0] += proportion
+                avg_proportions[main_group][1] += 1
+        avg_proportions = {k: v[0] / v[1] for k, v in avg_proportions.items()}
+    else:
+        avg_proportions = proportions
+
+    labels, values = zip(*avg_proportions.items())
+    colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
+    bars = plt.bar(labels, values, color=[colors.get(label[:3], 'grey') for label in labels])
+
+    plt.xlabel('Cell Type')
+    plt.ylabel('Proportion of Spiking Cells')
+    plt.title('Proportion of Spiking Cells by Cell Type')
+    plt.xticks(rotation=0)
+
+    # Add a legend for the color coding
+    handles = [plt.Line2D([0], [0], color=colors[label], lw=4) for label in colors]
+    plt.legend(handles, colors.keys())
+
+    plt.show()
+
+def get_population_firing_rates(spike_times, dt):
+
+    # Initialize dictionaries to store spike counts and total time for each cell type
+    spike_counts = defaultdict(int)
+    cell_type_counts = defaultdict(int)
+    
+    # Iterate through the spike_times to count spikes for each cell and cell type
+    for seg, times in spike_times:
+        cell_type = seg[:3]
+        cell_type_counts[cell_type] += 1
+        spike_counts[cell_type] += len(times)
+
+    # Calculate firing rates for each cell type
+    firing_rates = {}
+    for cell_type in cell_type_counts:
+        total_cells = cell_type_counts[cell_type]
+        total_spikes = spike_counts[cell_type]
+        # Convert dt from seconds to milliseconds if needed
+        time_window_seconds = dt * len(spike_times)  # Total time in seconds
+        firing_rate = (total_spikes / (total_cells * time_window_seconds))  # firing rate in Hz
+        firing_rates[cell_type] = firing_rate
+
+    return firing_rates
+
+
+
 def plot_spikes(vs, spike_times):
     fig_width = 27
 
@@ -451,11 +577,116 @@ def plot_spikes(vs, spike_times):
 
         i += 100
 
-        ax[1].plot(times, [i]*len(times),col+'|',ms=10,label=seg)
+        ax[1].plot(times, [i]*len(times),col+'.',ms=10,label=seg)
         ax[1].set_ylabel("Spikes")
-        #ax[1].legend()
+        ax[1].legend()
 
     plt.show()
+
+
+def plot_spikes_dots(spike_times):
+    fig_width = 27
+    fig_height = len(spike_times) * 0.2
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+    cell_type_positions = defaultdict(list)
+    cell_type_colors = {}
+
+    i = 0
+    for seg, times in spike_times:
+        if 'MC' in seg:
+            col = 'blue'
+        elif 'TC' in seg:
+            col = 'magenta'
+        elif 'GC' in seg:
+            col = 'orange'
+        else:
+            continue  # Skip unknown types
+
+        cell_type = seg[:3]
+        cell_type_colors[cell_type] = col
+        i += 1
+        ax.plot(times, [i] * len(times), color=col, marker='.', ms=10, linestyle='None')
+        cell_type_positions[cell_type].append(i)
+
+    ax.set_xlabel('Simulation Time [ms]', fontsize=14)
+    #ax.set_ylabel("Neurons", fontsize=18)
+
+    # Remove y-tick labels
+    ax.set_yticks([])
+
+    # Add custom y-axis labels with larger font size
+    for cell_type, positions in cell_type_positions.items():
+        mid_pos = np.mean(positions)
+        ax.text(-0.1, mid_pos, cell_type, ha='center', va='center', fontsize=22, transform=ax.get_yaxis_transform())
+
+        # Draw colored vertical lines
+        col = cell_type_colors[cell_type]
+        ax.plot([-0.05, -0.02], [positions[0], positions[0]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
+        ax.plot([-0.05, -0.02], [positions[-1], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
+        ax.plot([-0.05, -0.05], [positions[0], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
+
+    plt.show()
+
+
+
+def plot_spikes_dots_condensed(spike_times):
+
+    # Calculate the number of non-empty spike times to adjust figure height
+    num_cells = sum(1 for _, times in spike_times if times)
+    
+    # Set fig_height based on the number of non-empty spike times and desired spacing
+    fig_width = 27
+    fig_height = num_cells * 0.3  # Adjust this factor to decrease/increase vertical spacing
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+    cell_type_positions = defaultdict(list)
+    cell_type_colors = {}
+
+    i = 0
+    for seg, times in spike_times:
+        if not times:  # Skip if no spike times
+            continue
+
+        if 'MC' in seg:
+            col = 'blue'
+        elif 'TC' in seg:
+            col = 'magenta'
+        elif 'GC' in seg:
+            col = 'orange'
+        else:
+            continue  # Skip unknown types
+
+        cell_type = seg[:3]
+        cell_type_colors[cell_type] = col
+        i += 1
+        ax.plot(times, [i] * len(times), color=col, marker='.', ms=10, linestyle='None')
+        cell_type_positions[cell_type].append(i)
+
+    ax.set_xlabel('Simulation Time [ms]', fontsize=24)
+    #ax.set_ylabel('Neurons', fontsize=18)  # Uncomment if you want to add the y-axis label
+    ax.set_yticks([])
+
+    # Set x-axis tick label font size
+    ax.tick_params(axis='x', labelsize=24)
+
+    # Add custom y-axis labels with larger font size
+    for cell_type, positions in cell_type_positions.items():
+        mid_pos = np.mean(positions)
+        ax.text(-0.1, mid_pos, cell_type, ha='center', va='center', fontsize=24, transform=ax.get_yaxis_transform())
+
+        # Draw colored vertical lines
+        col = cell_type_colors[cell_type]
+        ax.plot([-0.05, -0.02], [positions[0], positions[0]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
+        ax.plot([-0.05, -0.02], [positions[-1], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
+        ax.plot([-0.05, -0.05], [positions[0], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
+
+    plt.show()
+
+
+
+
+
 
 
 def show_subplot(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
@@ -592,7 +823,7 @@ def show_subplot(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
     # ax[1].show()
     # large spectrogram
     # ax[2].subplots(figsize=(fig_width, 5))
-    colors = cm.get_cmap('Blues', 200)
+    colors = cm.get_cmap('jet', 200)
     sp = ax[2].contourf(t, frequencies, lfp_wavelet_power, 256, vmin=0, vmax=0.17, cmap=colors)
 
     ax[2].set_ylim((20,180))
@@ -940,7 +1171,7 @@ def plot_spectrogram(ax, f, t, Sxx, vmax, nperseg, order):
     """
     
     #plt.figure(figsize=(27, 6))
-    colors = cm.get_cmap('Blues', 200)
+    colors = cm.get_cmap('jet', 200)
     #cax = ax.pcolormesh(t, f, np.abs(Zxx), shading='gouraud', vmax=vmax, cmap=colors)
     print(Sxx)
     cax = ax.pcolormesh(t, f, np.real(Sxx), shading='gouraud', vmax=None, cmap=colors)
@@ -1037,7 +1268,7 @@ def plot_lfp_spectrogram(t_lfp, faxis, Sxx):
     # Create a meshgrid of time and frequency values
     t_mesh, f_mesh = np.meshgrid(t_lfp, faxis)
 
-    colors = cm.get_cmap('Blues', 200)
+    colors = cm.get_cmap('jet', 200)
     # Plot the spectrogram
     plt.pcolormesh(t_mesh, f_mesh, Sxx, vmax=vmax, cmap=colors)  # Transpose Sxx
     plt.colorbar()
@@ -1084,6 +1315,82 @@ def plot_lfp_power_welch(paramset, default = "GammaSignature_SetupTime"):
     plt.axvline(x = 130, color = 'gray', linestyle='dashed')
     plt.axvline(x = 180, color = 'gray', linestyle='dashed')
     #plt.title(f'segment length = {nperseg} points')
+    plt.show()
+
+
+
+def get_coherence(vs, cell_types, dt):
+    # Map cell types to their voltage data
+    type_voltages = {cell_type: [] for cell_type in cell_types}
+    
+    for cell, t, v in vs:
+        for cell_type in cell_types:
+            if cell_type in cell:
+                type_voltages[cell_type].append(v)
+                break
+
+    # Check if there is enough data for each cell type
+    for cell_type in cell_types:
+        if not type_voltages[cell_type]:
+            raise ValueError(f"No data for cell type {cell_type}.")
+    
+    # Compute average voltage signals for each cell type
+    avg_voltages = {}
+    for cell_type in cell_types:
+        # Stack all voltages for this cell type and average them
+        stacked_voltages = np.stack(type_voltages[cell_type])
+        avg_voltages[cell_type] = np.mean(stacked_voltages, axis=0)
+    
+    # Compute coherence between each pair of cell types
+    coherence_values = []
+    coherence_time = None
+
+    cell_types_list = list(avg_voltages.keys())
+
+    for i in range(len(cell_types_list)):
+        for j in range(i, len(cell_types_list)):
+            type_i = cell_types_list[i]
+            type_j = cell_types_list[j]
+            
+            v_i = avg_voltages[type_i]
+            v_j = avg_voltages[type_j]
+            
+            if len(v_i) == len(v_j):
+                f, Cxy = coherence(v_i, v_j, fs=1/dt)
+                coherence_values.append((f, Cxy, type_i, type_j))
+                if coherence_time is None:
+                    coherence_time = f
+
+    # Calculate average coherence
+    if not coherence_values:
+        raise ValueError("No coherence values were calculated.")
+    
+    coherence_avg = np.mean([Cxy for _, Cxy, _, _ in coherence_values], axis=0)
+    
+    return coherence_avg, coherence_values, coherence_time
+
+
+
+def plot_coherence(coherence_values, coherence_time):
+    def mix_colors(color1, color2):
+        c1 = np.array(mcolors.to_rgb(color1))
+        c2 = np.array(mcolors.to_rgb(color2))
+        return mcolors.to_hex((c1 + c2) / 2)
+
+    plt.figure(figsize=(12, 6))
+    
+    for f, Cxy, type_i, type_j in coherence_values:
+        if type_i != type_j:  # Exclude self-comparison
+            color_i = 'blue' if 'MC' in type_i else 'magenta' if 'TC' in type_i else 'orange'
+            color_j = 'blue' if 'MC' in type_j else 'magenta' if 'TC' in type_j else 'orange'
+            mixed_color = mix_colors(color_i, color_j)
+            plt.plot(f, Cxy, color=mixed_color, alpha=0.6, label=f'{type_i} vs {type_j}')
+    
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Coherence')
+    plt.title('Coherence between Cell Types')
+    plt.legend()
+    plt.grid(True)
     plt.show()
 
 
@@ -1337,7 +1644,7 @@ def show_subplot2(paramset, params_short=True):
     ax[0].set_xlabel('Simulation Time [ms]', fontsize=18)
     ax[0].legend(loc=(0.9, 0.27))
 
-    colors = cm.get_cmap('Blues', 200)
+    colors = cm.get_cmap('jet', 200)
     sp = ax[1].contourf(t, frequencies, lfp_wavelet_power, 256, vmin=0, vmax=0.17, cmap=colors)
     ax[1].set_ylim((20, 180))
     ax[1].set_xticks(np.arange(round(min(t)), max(t) + 1, 50.0))
@@ -1455,3 +1762,57 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
     plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, params_filename=params_filename, params_title=params_filename)
 
     #fig2, ax2 = plt.subplots(1, 1, figsize=(27, 6))
+
+
+
+def show_multichannel_lfp(paramset, params_short=True):
+    """
+    Loads LFP data from pkl files and plots the traces for all electrode locations.
+
+    :param paramset: The parameter set used for the simulation.
+    :param params_short: Boolean indicating if the parameter set name should be shortened.
+    """
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+
+    # Update results_dir to include paramset
+    results_dir = os.path.join(results_dir, paramset)
+
+    fig_width = 27
+
+
+
+    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
+        params_dict = yaml.load(f, Loader=yaml.FullLoader)
+
+    
+    probe_n_electrodes = params_dict['probe_n_electrodes']
+    probe_spacing = params_dict['probe_spacing']
+    x = params_dict['probe_x']
+    y = params_dict['probe_y']
+
+    fig, ax = plt.subplots(probe_n_electrodes, 1, figsize=(fig_width, 30), constrained_layout=True)
+    
+    for i in range(probe_n_electrodes):
+        z = params_dict['probe_z'] + i * probe_spacing
+        location = (x, y, z)
+
+        lfp_pkl_file = f'lfp_electrode_{i + 1}.pkl'
+        file_path = os.path.join(results_dir, lfp_pkl_file)
+
+        if not os.path.exists(file_path):
+            print(f"File not found: {file_path}")
+            continue
+
+        with open(file_path, 'rb') as f:
+            t_lfp, lfp = cPickle.load(f)
+
+        ax[i].plot(t_lfp, lfp)
+        ax[i].set_title(f'Electrode at {location}', fontsize=18)
+        ax[i].set_xlabel('Time (ms)', fontsize=18)
+        ax[i].set_ylabel('LFP (mV)', fontsize=18)
+        
+
+    #plt.title(f'LFP for vertical probe with {probe_n_electrodes} electrodes, {probe_spacing} um spacing', fontsize=16)
+    
+    plt.savefig(os.path.join(fig_dir, f'subplot{probe_n_electrodes}electrodes_{probe_spacing}spacing.jpg'), bbox_inches='tight', dpi=300)
+    plt.show()
