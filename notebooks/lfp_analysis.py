@@ -1318,8 +1318,10 @@ def plot_lfp_power_welch(paramset, default = "GammaSignature_SetupTime"):
     plt.show()
 
 
+def get_coherence(vs, cell_types, dt, nperseg):
+    dt_in_sec = dt * 0.001
+    noverlap = nperseg // 2
 
-def get_coherence(vs, cell_types, dt):
     # Map cell types to their voltage data
     type_voltages = {cell_type: [] for cell_type in cell_types}
     
@@ -1356,42 +1358,85 @@ def get_coherence(vs, cell_types, dt):
             v_j = avg_voltages[type_j]
             
             if len(v_i) == len(v_j):
-                f, Cxy = coherence(v_i, v_j, fs=1/dt)
+                f, Cxy = coherence(v_i, v_j, fs=1/dt_in_sec, nperseg=nperseg, noverlap=noverlap)
                 coherence_values.append((f, Cxy, type_i, type_j))
                 if coherence_time is None:
                     coherence_time = f
 
-    # Calculate average coherence
+    # Calculate average coherence if needed
     if not coherence_values:
         raise ValueError("No coherence values were calculated.")
     
     coherence_avg = np.mean([Cxy for _, Cxy, _, _ in coherence_values], axis=0)
     
-    return coherence_avg, coherence_values, coherence_time
+    return coherence_values, coherence_time, coherence_avg
 
 
+def mix_colors(color1, color2):
+    """Mix two colors and return the result as a hex color code."""
+    c1 = np.array(mcolors.to_rgb(color1))
+    c2 = np.array(mcolors.to_rgb(color2))
+    return mcolors.to_hex((c1 + c2) / 2)
 
-def plot_coherence(coherence_values, coherence_time):
-    def mix_colors(color1, color2):
-        c1 = np.array(mcolors.to_rgb(color1))
-        c2 = np.array(mcolors.to_rgb(color2))
-        return mcolors.to_hex((c1 + c2) / 2)
 
+def plot_coherence_frequency(coherence_values):
     plt.figure(figsize=(12, 6))
     
+    cell_type_colors = {
+        'MC': 'blue',
+        'TC': 'magenta',
+        'GC': 'orange'
+    }
+
     for f, Cxy, type_i, type_j in coherence_values:
         if type_i != type_j:  # Exclude self-comparison
-            color_i = 'blue' if 'MC' in type_i else 'magenta' if 'TC' in type_i else 'orange'
-            color_j = 'blue' if 'MC' in type_j else 'magenta' if 'TC' in type_j else 'orange'
+            color_i = next((color for key, color in cell_type_colors.items() if key in type_i), 'black')
+            color_j = next((color for key, color in cell_type_colors.items() if key in type_j), 'black')
             mixed_color = mix_colors(color_i, color_j)
             plt.plot(f, Cxy, color=mixed_color, alpha=0.6, label=f'{type_i} vs {type_j}')
     
+    plt.xlim(0, 200)  # Ensure x-axis range covers up to 200 Hz
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('Coherence')
-    plt.title('Coherence between Cell Types')
+    plt.title('Coherence Over Frequency Between Cell Types')
     plt.legend()
     plt.grid(True)
     plt.show()
+
+
+def plot_multiple_coherence_frequency(cell_type_lists, vs, dt, nperseg_list):
+    num_plots = len(nperseg_list)
+    fig, axs = plt.subplots(num_plots, 1, figsize=(12, 2 * num_plots), sharex=True, sharey=True)
+    
+    # Define cell type colors
+    cell_type_colors = {
+        'MC': 'blue',
+        'TC': 'magenta',
+        'GC': 'orange'
+    }
+    
+    for idx, nperseg in enumerate(nperseg_list):
+        # Compute coherence for each nperseg value
+        coherence_results = [get_coherence(vs, cell_types, dt, nperseg) for cell_types in cell_type_lists]
+        
+        for coherence_values, _, _ in coherence_results:
+            for f, Cxy, type_i, type_j in coherence_values:
+                if type_i != type_j:  # Exclude self-comparison
+                    color_i = next((color for key, color in cell_type_colors.items() if key in type_i), 'black')
+                    color_j = next((color for key, color in cell_type_colors.items() if key in type_j), 'black')
+                    mixed_color = mix_colors(color_i, color_j)
+                    axs[idx].plot(f, Cxy, color=mixed_color, alpha=0.6, label=f'{type_i} vs {type_j}')
+        
+        axs[idx].set_xlim(0, 200)  # Ensure x-axis range covers up to 200 Hz
+        axs[idx].set_xlabel('Frequency (Hz)')
+        axs[idx].set_ylabel('Coherence')
+        axs[idx].set_title(f'Coherence Over Frequency for nperseg = {nperseg}')
+        axs[idx].grid(True)
+        axs[idx].legend()
+
+    plt.tight_layout()
+    plt.show()
+
 
 
 def get_power_f_range(paramset, f_min, f_max, nperseg=2000):
