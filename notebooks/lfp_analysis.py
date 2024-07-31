@@ -1319,12 +1319,27 @@ def plot_lfp_power_welch(paramset, default = "GammaSignature_SetupTime"):
 
 
 def get_coherence(vs, cell_types, dt, nperseg):
+    """
+    Calculate the coherence between pairs of neurons for given cell types.
+
+    Parameters:
+    vs (list of tuples): Each tuple contains a cell identifier, time, and a list of voltage values.
+    cell_types (list of str): List of cell type identifiers to compare (e.g., ['MC', 'GC', 'TC']).
+    dt (float): Time step in milliseconds.
+    nperseg (int): Length of each segment for FFT.
+
+    Returns:
+    coherence_values (list of tuples): Each tuple contains frequencies, coherence values, and the pair of cell types compared.
+    coherence_freqs (array): Array of frequency values.
+    coherence_avg (dict): Average coherence values for each cell type pair.
+    """
     dt_in_sec = dt * 0.001
     noverlap = nperseg // 2
 
     # Map cell types to their voltage data
     type_voltages = {cell_type: [] for cell_type in cell_types}
     
+    # Group voltages by cell type
     for cell, t, v in vs:
         for cell_type in cell_types:
             if cell_type in cell:
@@ -1333,80 +1348,93 @@ def get_coherence(vs, cell_types, dt, nperseg):
 
     # Check if there is enough data for each cell type
     for cell_type in cell_types:
-        if not type_voltages[cell_type]:
-            raise ValueError(f"No data for cell type {cell_type}.")
-    
-    # Compute average voltage signals for each cell type
-    avg_voltages = {}
-    for cell_type in cell_types:
-        # Stack all voltages for this cell type and average them
-        stacked_voltages = np.stack(type_voltages[cell_type])
-        avg_voltages[cell_type] = np.mean(stacked_voltages, axis=0)
-    
-    # Compute coherence between each pair of cell types
-    coherence_values = []
-    coherence_time = None
+        if len(type_voltages[cell_type]) < 2:
+            raise ValueError(f"Not enough data for cell type {cell_type} to compute coherence.")
 
-    cell_types_list = list(avg_voltages.keys())
+    # Compute coherence for pairs of neurons within and between cell types
+    coherence_values = None
 
-    for i in range(len(cell_types_list)):
-        for j in range(i, len(cell_types_list)):
-            type_i = cell_types_list[i]
-            type_j = cell_types_list[j]
-            
-            v_i = avg_voltages[type_i]
-            v_j = avg_voltages[type_j]
-            
-            if len(v_i) == len(v_j):
-                f, Cxy = coherence(v_i, v_j, fs=1/dt_in_sec, nperseg=nperseg, noverlap=noverlap)
-                coherence_values.append((f, Cxy, type_i, type_j))
-                if coherence_time is None:
-                    coherence_time = f
+    # Store coherence values for averaging later
+    coherence_dict = {type_i: {type_j: [] for type_j in cell_types} for type_i in cell_types}
 
-    # Calculate average coherence if needed
-    if not coherence_values:
-        raise ValueError("No coherence values were calculated.")
-    
-    coherence_avg = np.mean([Cxy for _, Cxy, _, _ in coherence_values], axis=0)
-    
-    return coherence_values, coherence_time, coherence_avg
+    for type_i in cell_types:
+        for type_j in cell_types:
+            voltages_i = type_voltages[type_i]
+            voltages_j = type_voltages[type_j]
+
+            for v_i in voltages_i:
+                for v_j in voltages_j:
+                    if len(v_i) == len(v_j):
+                        print(f"Computing coherence for {type_i} vs {type_j}...")
+                        f, Cxy = coherence(v_i, v_j, fs=1/dt_in_sec, nperseg=nperseg, noverlap=noverlap)
+                        coherence_dict[type_i][type_j].append(Cxy)
+                        if coherence_values is None:
+                            coherence_values = f
+
+    # Calculate average coherence across pairs of neurons for each cell type pair
+    coherence_avg = {}
+    for type_i in cell_types:
+        for type_j in cell_types:
+            if coherence_dict[type_i][type_j]:
+                coherence_avg[(type_i, type_j)] = np.mean(coherence_dict[type_i][type_j], axis=0)
+                print(f"Averaging coherence for {type_i} vs {type_j}...")
+
+    return coherence_dict, coherence_values, coherence_avg
 
 
 def mix_colors(color1, color2):
-    """Mix two colors and return the result as a hex color code."""
+    """
+    Mix two colors and return the result as a hex color code.
+
+    Parameters:
+    color1 (str): First color in a format recognized by matplotlib (e.g., 'blue', '#1f77b4').
+    color2 (str): Second color in a format recognized by matplotlib.
+
+    Returns:
+    str: Hex color code of the mixed color.
+    """
     c1 = np.array(mcolors.to_rgb(color1))
     c2 = np.array(mcolors.to_rgb(color2))
     return mcolors.to_hex((c1 + c2) / 2)
 
 
-def plot_coherence_frequency(coherence_values):
+def compute_all_coherence(vs, cell_type_lists, dt, nperseg_list):
+    """Compute coherence for all cell type combinations and nperseg values.
+    
+    Args:
+        vs (list of tuples): List containing tuples with cell identifiers and their voltage traces.
+        cell_type_lists (list of lists of str): Each sublist contains cell types to be compared.
+        dt (float): Time step in seconds for the voltage traces.
+        nperseg_list (list of int): List of segment lengths for coherence computation.
+    
+    Returns:
+        dict: A dictionary where keys are tuples (cell_types, nperseg) and values are 
+              tuples (coherence_dict, coherence_freqs, coherence_avg) for each combination.
+    """
+    coherence_results = {}
+    
+    # Iterate over each combination of cell types
+    for cell_types in cell_type_lists:
+        # Iterate over each value of nperseg
+        for nperseg in nperseg_list:
+            # Compute coherence for the current cell type combination and nperseg
+            coherence_dict, coherence_freqs, coherence_avg = get_coherence(vs, cell_types, dt, nperseg)
+            
+            # Store the results in the dictionary with a key of (cell_types, nperseg)
+            coherence_results[(tuple(cell_types), nperseg)] = (coherence_dict, coherence_freqs, coherence_avg)
+    
+    return coherence_results
+
+
+def plot_coherence_frequency(coherence_avg, coherence_freqs):
+    """
+    Plot coherence values over frequency for pairs of cell types.
+
+    Parameters:
+    coherence_avg (dict): Average coherence values for each cell type pair.
+    coherence_freqs (array): Array of frequency values.
+    """
     plt.figure(figsize=(12, 6))
-    
-    cell_type_colors = {
-        'MC': 'blue',
-        'TC': 'magenta',
-        'GC': 'orange'
-    }
-
-    for f, Cxy, type_i, type_j in coherence_values:
-        if type_i != type_j:  # Exclude self-comparison
-            color_i = next((color for key, color in cell_type_colors.items() if key in type_i), 'black')
-            color_j = next((color for key, color in cell_type_colors.items() if key in type_j), 'black')
-            mixed_color = mix_colors(color_i, color_j)
-            plt.plot(f, Cxy, color=mixed_color, alpha=0.6, label=f'{type_i} vs {type_j}')
-    
-    plt.xlim(0, 200)  # Ensure x-axis range covers up to 200 Hz
-    plt.xlabel('Frequency (Hz)')
-    plt.ylabel('Coherence')
-    plt.title('Coherence Over Frequency Between Cell Types')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-
-def plot_multiple_coherence_frequency(cell_type_lists, vs, dt, nperseg_list):
-    num_plots = len(nperseg_list)
-    fig, axs = plt.subplots(num_plots, 1, figsize=(12, 2 * num_plots), sharex=True, sharey=True)
     
     # Define cell type colors
     cell_type_colors = {
@@ -1414,28 +1442,230 @@ def plot_multiple_coherence_frequency(cell_type_lists, vs, dt, nperseg_list):
         'TC': 'magenta',
         'GC': 'orange'
     }
-    
-    for idx, nperseg in enumerate(nperseg_list):
-        # Compute coherence for each nperseg value
-        coherence_results = [get_coherence(vs, cell_types, dt, nperseg) for cell_types in cell_type_lists]
-        
-        for coherence_values, _, _ in coherence_results:
-            for f, Cxy, type_i, type_j in coherence_values:
-                if type_i != type_j:  # Exclude self-comparison
-                    color_i = next((color for key, color in cell_type_colors.items() if key in type_i), 'black')
-                    color_j = next((color for key, color in cell_type_colors.items() if key in type_j), 'black')
-                    mixed_color = mix_colors(color_i, color_j)
-                    axs[idx].plot(f, Cxy, color=mixed_color, alpha=0.6, label=f'{type_i} vs {type_j}')
-        
-        axs[idx].set_xlim(0, 200)  # Ensure x-axis range covers up to 200 Hz
-        axs[idx].set_xlabel('Frequency (Hz)')
-        axs[idx].set_ylabel('Coherence')
-        axs[idx].set_title(f'Coherence Over Frequency for nperseg = {nperseg}')
-        axs[idx].grid(True)
-        axs[idx].legend()
 
+    # Plot average coherence values
+    for (type_i, type_j), Cxy_avg in coherence_avg.items():
+        if type_i != type_j:  # Exclude self-comparison
+            color_i = next((color for key, color in cell_type_colors.items() if key in type_i), 'black')
+            color_j = next((color for key, color in cell_type_colors.items() if key in type_j), 'black')
+            mixed_color = mix_colors(color_i, color_j)
+            plt.plot(coherence_freqs, Cxy_avg, color=mixed_color, alpha=0.6, label=f'{type_i} vs {type_j}')
+    
+    plt.xlim(0, 200)  # Ensure x-axis range covers up to 200 Hz
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Coherence')
+    plt.title('Average Coherence Over Frequency Between Cell Types')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+def plot_multiple_coherence_frequency(cell_type_lists, vs, dt, nperseg_list):
+    """Plot coherence results for multiple nperseg values and specific cell type combinations.
+    
+    Args:
+        cell_type_lists (list of lists of str): Each sublist contains cell types to be compared.
+        vs (list of tuples): List containing tuples with cell identifiers and their voltage traces.
+        dt (float): Time step in seconds for the voltage traces.
+        nperseg_list (list of int): List of segment lengths for coherence computation.
+    
+    Returns:
+        None: Displays plots for coherence results.
+    """
+    # Compute coherence results
+    coherence_results = compute_all_coherence(vs, cell_type_lists, dt, nperseg_list)
+    
+    # Define cell type colors once
+    cell_type_colors = {
+        'MC': 'blue',
+        'TC': 'magenta',
+        'GC': 'orange'
+    }
+    
+    # Define cell type combinations to plot
+    cell_type_combinations = [
+        (type_i, type_j) 
+        for cell_types in cell_type_lists 
+        for type_i in cell_types 
+        for type_j in cell_types 
+        if type_i != type_j
+    ]
+    
+    # Determine number of plots
+    num_plots = len(nperseg_list)
+    fig, axs = plt.subplots(num_plots, 1, figsize=(12, 2 * num_plots), sharex=True, sharey=True)
+    
+    # Plot coherence results for each value of nperseg
+    for idx, nperseg in enumerate(nperseg_list):
+        ax = axs[idx] if num_plots > 1 else axs
+        
+        for (type_i, type_j) in cell_type_combinations:
+            if (tuple([type_i, type_j]), nperseg) in coherence_results:
+                print(f"Plotting coherence for {type_i} vs {type_j} with nperseg = {nperseg}...")
+                _, coherence_freqs, coherence_avg = coherence_results[(tuple([type_i, type_j]), nperseg)]
+                
+                for (type_a, type_b), Cxy_avg in coherence_avg.items():
+                    if (type_a == type_i and type_b == type_j) or (type_a == type_j and type_b == type_i):
+                        color_a = cell_type_colors.get(type_a, 'black')
+                        color_b = cell_type_colors.get(type_b, 'black')
+                        mixed_color = mix_colors(color_a, color_b)
+                        ax.plot(coherence_freqs, Cxy_avg, color=mixed_color, alpha=0.6, label=f'{type_a} vs {type_b}')
+        
+        ax.set_xlim(0, 200)  # Ensure x-axis range covers up to 200 Hz
+        ax.set_xlabel('Frequency (Hz)')
+        ax.set_ylabel('Coherence')
+        ax.set_title(f'Coherence Over Frequency for nperseg = {nperseg}')
+        ax.grid(True)
+        ax.legend()
+    
     plt.tight_layout()
     plt.show()
+
+
+def spike_times_to_binary(spike_times, dt, max_time):
+    """
+    Convert spike times to binary spike trains.
+
+    Parameters:
+    - spike_times: List of spike times for a neuron.
+    - dt: Time resolution in ms.
+    - max_time: Maximum time for the spike train in ms.
+
+    Returns:
+    - spike_train: Binary spike train.
+    """
+    num_bins = int(max_time / dt)
+    spike_train = np.zeros(num_bins)
+    
+    for spike_time in spike_times:
+        bin_idx = int(spike_time / dt)
+        if bin_idx < num_bins:
+            spike_train[bin_idx] = 1
+    
+    return spike_train
+
+
+
+def compute_cross_correlation(spikes_i, spikes_j, dt, max_time):
+    """
+    Compute cross-correlation between two spike trains.
+
+    Parameters:
+    spikes_i (list): Spike times for the first neuron.
+    spikes_j (list): Spike times for the second neuron.
+    dt (float): Time resolution in ms.
+    max_time (float): Maximum time for the spike train in ms.
+
+    Returns:
+    lags (array): Array of lag times.
+    corr (array): Cross-correlation values.
+    """
+    # Define the time bins
+    num_bins = int(max_time / dt) + 1
+    bins = np.arange(num_bins) * dt
+    
+    # Create histograms for the spike trains
+    hist_i, _ = np.histogram(spikes_i, bins=bins)
+    hist_j, _ = np.histogram(spikes_j, bins=bins)
+    
+    # Compute cross-correlation
+    corr = correlate(hist_i, hist_j, mode='full')
+    lags = np.arange(-(len(hist_i) - 1), len(hist_i)) * dt
+
+    # Normalize cross-correlation
+    norm_i = np.sqrt(np.sum(hist_i**2))
+    norm_j = np.sqrt(np.sum(hist_j**2))
+    if norm_i == 0 or norm_j == 0:
+        print("Warning: Zero normalization factor for cross-correlation.")
+        return lags, np.zeros_like(corr)
+    
+    corr = corr / (norm_i * norm_j)
+    
+    # Check for NaN values
+    if np.any(np.isnan(corr)):
+        print("Warning: NaN values found in cross-correlation.")
+    
+    return lags, corr
+
+
+def plot_cross_correlation(lags, corr):
+    """
+    Plot cross-correlation traces.
+
+    Parameters:
+    lags (array): Array of lag times.
+    corr (array): Cross-correlation values.
+    """
+    plt.figure(figsize=(12, 6))
+
+    if len(lags) == 0 or len(corr) == 0:
+        print("No valid cross-correlation data to plot.")
+        return
+
+    plt.plot(lags, corr, color='blue', alpha=0.6, label='Cross-Correlation')
+    
+    plt.xlabel('Lag (ms)')
+    plt.ylabel('Cross-Correlation')
+    plt.title('Cross-Correlation Trace')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
+def extract_spike_times_by_cell_type(spike_times, cell_types):
+    """
+    Extract spike times for each cell type from the spike_times data.
+
+    Parameters:
+    - spike_times: List of tuples containing cell name and spike times.
+    - cell_types: List of cell types to extract.
+
+    Returns:
+    - cell_type_spike_times: Dictionary with cell types as keys and lists of spike times as values.
+    """
+    cell_type_spike_times = defaultdict(list)
+
+    for cell, spikes in spike_times:
+        for cell_type in cell_types:
+            if cell_type in cell:
+                cell_type_spike_times[cell_type].append(spikes)
+                break
+    
+    return cell_type_spike_times
+
+def compare_cell_types(spike_times, cell_types, dt, max_time):
+    """
+    Compare cross-correlation between all neurons of different cell types.
+
+    Parameters:
+    - spike_times: List of tuples containing cell name and spike times.
+    - cell_types: List of cell types to compare.
+    - dt: Time resolution in ms.
+    - max_time: Maximum time for the spike train in ms.
+
+    Returns:
+    - correlations: Dictionary with tuples of cell type comparisons and their cross-correlations.
+    """
+    cell_type_spike_times = extract_spike_times_by_cell_type(spike_times, cell_types)
+    
+    correlations = {}
+    
+    for i, type_i in enumerate(cell_types):
+        for j, type_j in enumerate(cell_types):
+            if i < j:  # Avoid redundant comparisons and self-comparisons
+                spike_trains_i = cell_type_spike_times[type_i]
+                spike_trains_j = cell_type_spike_times[type_j]
+                
+                all_corr = []
+                for spikes_i in spike_trains_i:
+                    for spikes_j in spike_trains_j:
+                        lags, corr = compute_cross_correlation(spikes_i, spikes_j, dt, max_time)
+                        all_corr.append(corr)
+                
+                avg_corr = np.mean(all_corr, axis=0)
+                correlations[(type_i, type_j)] = (lags, avg_corr)
+    
+    return correlations
 
 
 
