@@ -55,6 +55,23 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     return y
 
 
+
+def mix_colors(color1, color2):
+    """
+    Mix two colors and return the result as a hex color code.
+
+    Parameters:
+    color1 (str): First color in a format recognized by matplotlib (e.g., 'blue', '#1f77b4').
+    color2 (str): Second color in a format recognized by matplotlib.
+
+    Returns:
+    str: Hex color code of the mixed color.
+    """
+    c1 = np.array(mcolors.to_rgb(color1))
+    c2 = np.array(mcolors.to_rgb(color2))
+    return mcolors.to_hex((c1 + c2) / 2)
+
+
 def get_dirs(paramset='ParameterSetBase'):
     cwd = os.getcwd()
     ob_dir = os.path.dirname(cwd)
@@ -1382,21 +1399,6 @@ def get_coherence(vs, cell_types, dt, nperseg):
     return coherence_dict, coherence_values, coherence_avg
 
 
-def mix_colors(color1, color2):
-    """
-    Mix two colors and return the result as a hex color code.
-
-    Parameters:
-    color1 (str): First color in a format recognized by matplotlib (e.g., 'blue', '#1f77b4').
-    color2 (str): Second color in a format recognized by matplotlib.
-
-    Returns:
-    str: Hex color code of the mixed color.
-    """
-    c1 = np.array(mcolors.to_rgb(color1))
-    c2 = np.array(mcolors.to_rgb(color2))
-    return mcolors.to_hex((c1 + c2) / 2)
-
 
 def compute_all_coherence(vs, cell_type_lists, dt, nperseg_list):
     """Compute coherence for all cell type combinations and nperseg values.
@@ -1426,7 +1428,9 @@ def compute_all_coherence(vs, cell_type_lists, dt, nperseg_list):
     return coherence_results
 
 
-def plot_coherence_frequency(coherence_avg, coherence_freqs):
+
+
+def plot_coherence_frequency(coherence_avg, coherence_values):
     """
     Plot coherence values over frequency for pairs of cell types.
 
@@ -1449,7 +1453,7 @@ def plot_coherence_frequency(coherence_avg, coherence_freqs):
             color_i = next((color for key, color in cell_type_colors.items() if key in type_i), 'black')
             color_j = next((color for key, color in cell_type_colors.items() if key in type_j), 'black')
             mixed_color = mix_colors(color_i, color_j)
-            plt.plot(coherence_freqs, Cxy_avg, color=mixed_color, alpha=0.6, label=f'{type_i} vs {type_j}')
+            plt.plot(coherence_values, Cxy_avg, color=mixed_color, alpha=0.6, label=f'{type_i} vs {type_j}')
     
     plt.xlim(0, 200)  # Ensure x-axis range covers up to 200 Hz
     plt.xlabel('Frequency (Hz)')
@@ -1564,11 +1568,13 @@ def compute_cross_correlation(spikes_i, spikes_j, dt, max_time):
     num_bins = int(max_time / dt) + 1
     bins = np.arange(num_bins) * dt
     
-    # Create histograms for the spike trains
+    # Create histograms for the spike trains, representing the spike count in each bin
     hist_i, _ = np.histogram(spikes_i, bins=bins)
     hist_j, _ = np.histogram(spikes_j, bins=bins)
     
-    # Compute cross-correlation
+    # Compute cross-correlation of the two histograms
+    # computed with the 'full' mode, which returns the cross-correlation at all possible lags.
+    # lags is an array of lag times, ranging from -(len(hist_i) - 1) * dt to (len(hist_i) - 1) * dt
     corr = correlate(hist_i, hist_j, mode='full')
     lags = np.arange(-(len(hist_i) - 1), len(hist_i)) * dt
 
