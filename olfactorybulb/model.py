@@ -47,6 +47,7 @@ class OlfactoryBulb:
         self.slice_dir = os.path.abspath(os.path.join(params.slice_dir, params.slice_name))
         self.cells = {}
         self.inputs = []
+        self.gc_inputs = [] # check all functionality related is added
         self.electrode_locations = []
 
         self.gj_source_gids = set()
@@ -71,6 +72,7 @@ class OlfactoryBulb:
         self.v_vectors = {}
         self.spike_vectors = {}
         self.input_vectors = []
+        self.gc_input_vectors = [] # check all functionality related is added
 
         for cell_type in ['MC', 'GC', 'TC']:
             self.load_cells(cell_type)
@@ -112,21 +114,26 @@ class OlfactoryBulb:
                     [setattr(s, syn_attrib, attrib_value) for s in getattr(h, syn_mech)]
 
        
-        # Add glomerular inputs
+        centrif_inputsegs = ['GC3[0].apic[9]',
+                        'GC3[0].apic[8]',
+                        'GC3[0].apic[7]',
+                        'GC3[0].apic[6]',
+                        'GC3[0].apic[5]',
+                        'GC3[0].apic[4]',
+                        'GC3[0].apic[3]',
+                        'GC3[0].apic[2]']
+    
+        # Add glomerular and GC inputs
         for time, odor_info in params.input_odors.items():
             # Method 1
             time += params.sim_setup_time
             self.add_inputs(odor=odor_info["name"], t=time, rel_conc=odor_info["rel_conc"])
-
-        #self.add_background_input()
+            print("between add_inputs and add_centrif")
+        for time, odor_info in params.input_odors.items():
+            # Method 1
+            time += params.sim_setup_time
+            self.add_centrifugal_inputs(t=time, centrif_inputsegs=centrif_inputsegs)
         
-
-        #for cell_model in self.cells["MC"]:
-        #    print("Adding background input for cell:", cell_model)
-        #    assert hasattr(cell_model, 'soma'), "Neuron does not have a soma segment."
-        #    self.add_background_input2(cell_model)
-        #except Exception as e:
-            #print("An error occurred while adding background input:", e)
         
         # LFP
         self.electrode = self.create_lfp_electrode(*params.lfp_electrode_location,
@@ -270,6 +277,7 @@ class OlfactoryBulb:
             # Odor is modeled as a gaussian spike train representing OSN spikes during inhalation
             # exhalation is assumed to not generate OSN spikes
             spike_times = self.get_gaussian_spike_train(spike_count, time, inhale_duration)
+            print("glom_spike_times:", spike_times)
 
             # Create synapse point process
             seg = eval(seg_name.replace('(1)', '(.999)'))
@@ -308,6 +316,84 @@ class OlfactoryBulb:
             self.input_vectors.append((single_rank_seg_name, input_vec))
 
             self.inputs.append((syn, ns, netcon))
+
+
+    def stim_gc_segments(self, time, gc_input_segs, frequency):
+        """
+        Adds excitatory input to granule cell (GC) segments at a specified start time, intensity, and frequency.
+
+        The input is modeled as a constant frequency spike train that triggers excitatory synapses placed on 
+        the granule cell segments.
+
+        :param time: the onset time in ms.
+        :param gc_input_segs: a list containing tuples of:
+            a) The name of the segment to stimulate as it appears on the current MPI rank
+            b) Segment gid
+            c) Segment name as it appears when there is only one rank. If not using MPI, a) and c) are the same.
+        :param intensity: 0-1 representing input intensity.
+        :param frequency: Frequency of spikes (in Hz) for the constant spike train.
+
+        :return: None
+        """
+
+        h = self.h
+
+        inhale_duration = self.params.inhale_duration
+
+        for seg_name, seg_gid, single_rank_seg_name in gc_input_segs:
+            # REPLACE THIS WITH OWN PERIPHERAL SPIKE TRAIN LOGIC
+            # Seed for randomization (if needed)
+            seed_source = "%s|%s|%s|%s" % (self.rnd_seed, time, single_rank_seg_name)
+            np.random.seed(self.stable_hash(seed_source))
+
+            # Generate a constant frequency spike train
+            spike_times = self.get_constant_spike_train(time, inhale_duration, frequency=frequency)
+            print("GC input spike times:", spike_times)
+            #spike_times = np.arange(time, time + (spike_count / frequency) * 1000, 1000 / frequency)
+
+            # Check if the segment exists
+            #try:
+            #    seg = eval(seg_name.replace('(1)', '(.999)'))
+            #except IndexError:
+            #    print(f"Segment {seg_name} does not exist. Skipping.")
+            #    continue  # Skip this segment if it doesn't exist   
+
+            # Create synapse point process
+            seg = eval(seg_name.replace('(1)', '(.999)'))
+            syn = h.Exp2Syn(seg)
+            # to do: add periph input parameters to self.params
+            syn.tau1 = self.params.input_syn_tau1
+            syn.tau2 = self.params.input_syn_tau2
+
+            if "GC" in seg_name:  # MCs
+                print("yes, GC in seg_name", seg_name)
+                delay = self.params.mc_input_delay # set self.params.gc_input_delay
+                weight = 0.2 # set self.params.gc_input_weight
+            else:
+                pass
+
+            # VecStim to deliver events to synapse at vector times
+            ns = h.VecStim()
+            ns.play(h.Vector(spike_times + delay))
+
+            # Netcon to trigger the synapse
+            netcon = h.NetCon(
+                ns,
+                syn,
+                0,  # thresh
+                0,  # delay
+                weight  # weight uS
+            )
+
+            # Record input events
+            input_vec = h.Vector()
+            netcon.record(input_vec)
+            # TO DO: create new list to keep track of your own input vectors
+            self.gc_input_vectors.append((seg_name, input_vec))
+
+            self.gc_inputs.append((syn, ns, netcon))
+
+
 
     def stable_hash(self, source, digits=9):
         """
@@ -421,7 +507,7 @@ class OlfactoryBulb:
             z = z_start + i * spacing
             location = (x, y, z)
             self.electrode_locations.append(location)
-            print(f"Electrode {i+1} location: {location}")
+            #print(f"Electrode {i+1} location: {location}")
             electrode = LfpElectrode(x, y, z, sampling_period, method)
             
             electrodes.append(electrode)
@@ -488,16 +574,20 @@ class OlfactoryBulb:
         # Get all the different cell models used in the slice
         input_models = set()
         for cells in self.glom_cells.values():
+            print("glom_cells:", cells)
             for cell in cells:
                 input_models.add(cell[:cell.find('[')])
         #print("input_models:", input_models) {'TC5', 'MC5', 'MC4', 'TC4', 'TC3'}
 
         # Get each model's input segments (in the tuft)
+        # tufted_dend_root': 'apic[12](1)'}
         model_inputsegs = {m.class_name: m.tufted_dend_root
                            for m in CellModel \
                                .select(CellModel.class_name, CellModel.tufted_dend_root) \
                                .where(CellModel.class_name.in_(list(input_models)))}
+        print("model_inputsegs = ", model_inputsegs)
         return model_inputsegs
+
 
     def add_gap_junctions(self, in_name, g_gap):
         """
@@ -615,6 +705,7 @@ class OlfactoryBulb:
         print(f'5. adding inputs')
 
         model_inputsegs = self.get_model_inputsegs()
+        #model_inputsegs =  {'MC4': 'apic[3](1)', 'MC5': 'apic[2](1)', 'TC3': 'apic[2](1)',..
 
         # Get input odor glomeruli
         glom_intensities = {g.glom_id: g.intensity
@@ -622,26 +713,37 @@ class OlfactoryBulb:
                                 .select(OdorGlom.glom_id, OdorGlom.intensity)
                                 .join(Odor)
                                 .where(Odor.name == odor)}
+        print("glom_intensities:", glom_intensities)
 
         for glom_id, cells in self.glom_cells.items():
+            
             glom_id = int(glom_id)
 
             input_segs = []
             for cell in cells:
+                # cell TC3[6]
                 rank_cell = self.bn_server.rank_section_name(cell)
+                # None, None None, eventually cell: TC3[6], then rank_cell: TC3[0]
 
                 # Add inputs only to cells that are on this rank
                 if rank_cell is None:
                     continue
 
                 model_class = rank_cell[:rank_cell.find('[')]
+                #print("model_class:", model_class)  # TC4
+               
                 input_seg = model_inputsegs[model_class]
-                seg_address = 'h.' + rank_cell + '.' + input_seg
+                #print("input_seg:", input_seg)  # apic[2](1)
+                seg_address = 'h.' + rank_cell + '.' + input_seg  
+                #print("seg_address:", seg_address) # h.TC4[0].apic[2](1)
 
                 single_rank_address = 'h.' + cell + '.' + input_seg
+                #print("single_rank_address:", single_rank_address) # h.TC4[14].apic[2](1)
                 single_rank_gid = int(sha1(single_rank_address.encode()).hexdigest(), 16) % (10 ** 9)
+                #print("single_rank_gid:", single_rank_gid) # 982114369
 
                 input_segs.append((seg_address, single_rank_gid, single_rank_address))
+                print("input_segs:", input_segs)
 
             if len(input_segs) > 0:
                 glom_intensity = glom_intensities[glom_id] * rel_conc
@@ -657,6 +759,7 @@ class OlfactoryBulb:
 
         with open(os.path.join(self.slice_dir, 'glom_cells.json')) as f:
             self.glom_cells = json.load(f)
+
 
     def get_gaussian_spike_train(self, spikes=50, start_time=100, duration=10):
         """
@@ -680,7 +783,80 @@ class OlfactoryBulb:
         times.sort()
 
         return times
+    
+    
+    def get_constant_spike_train(self, start_time=100, duration=10, frequency=10):
+        """
+        Generates a spike train with a constant inter-spike interval based on the specified frequency.
 
+        :param frequency: The frequency of spikes in Hz (spikes per second)
+        :param start_time: The onset time of the spike train
+        :param duration: The duration for which spikes will be generated (in ms)
+        :return: A numpy array of spike times in chronological order
+        """
+        
+        # Calculate the inter-spike interval in ms (since frequency is in Hz)
+        inter_spike_interval = 1000.0 / frequency  # Convert Hz to ms interval
+        
+        # Generate the times for the spikes starting at start_time and ending at start_time + duration
+        num_spikes = int(np.floor(duration / inter_spike_interval))  # Number of spikes that fit in the duration
+        
+        # Generate spike times
+        times = np.arange(start_time, start_time + num_spikes * inter_spike_interval, inter_spike_interval)
+        
+        return times
+
+
+    def add_centrifugal_inputs(self, centrif_inputsegs, t):
+        """
+        Add centrifugal input (e.g., from PCx) to GCs
+
+        model_class is the cell type, e.g. TC4
+        input_seg the is the section name, e.g. apic[2](1)
+        seg_address  puts 'h.' + the cell name and section, e.g.  h.TC4[0].apic[2](1)
+        single_rank_address # h.TC4[14].apic[2](1)
+        single_rank_gid = int(sha1(single_rank_address.encode()).hexdigest(), 16) % (10 ** 9)
+        single_rank_gid ' is the rank id, e.g. 982114369
+
+        :param centrif_segments: List of GC segment identifiers (e.g., ['GC1[0].soma', 'GC2[0].dend[3]', ...])
+        :param t: Onset time or list of times for the centrifugal input
+        :param centrif_intensity: Intensity multiplier (0-1 or higher) to control input strength
+        """
+        gc_input_segs = []
+        print("centrif_inputsegs:", centrif_inputsegs)
+        for seg in centrif_inputsegs:
+            print("seg:", seg)
+            print("BEGIN THE GC INPUTS")
+            print("adding input to segment", seg)
+            # cell TC3[6]
+            cell = seg.split('.')[0] #[:3]
+            print("cell:", cell)
+            rank_cell = self.bn_server.rank_section_name(cell)
+            print("rank_cell:", rank_cell)
+
+            # Construct the full segment address
+            seg_address = 'h.' + seg
+            print("seg_address:", seg_address) # h.TC4[0].apic[2](1)
+
+            single_rank_address = 'h.' + seg
+            print("single_rank_address:", single_rank_address)
+
+            # Compute a unique GID for this segment
+            single_rank_gid = int(sha1(seg_address.encode()).hexdigest(), 16) % (10 ** 9)
+            print("single_rank_gid:", single_rank_gid)
+
+            # Append the segment, GID, and address to the input segments list
+            gc_input_segs.append((seg_address, single_rank_gid, single_rank_address))
+            print('gc_input_segs:', gc_input_segs)
+
+        # Apply centrifugal input to all segments with the same intensity
+        if len(gc_input_segs) > 0:
+            # Add synapses onto the GC soma/dendrites
+            # Apply the centrifugal intensity uniformly across all input segmentss
+            print("calling self.stim_gc_segments for", gc_input_segs)
+            self.stim_gc_segments(t, gc_input_segs, frequency=20)
+        
+        
     def load_cells(self, cell_type):
         """
         Load the cells of the specified type onto least busy MPI ranks.
@@ -765,22 +941,6 @@ class OlfactoryBulb:
                     print("stim.amp:", stim.amp)
 
 
-    def add_background_input2(self, cell):
-        """
-        Adds a small injected current to the soma of all cells for the duration of simulation
-        """
-
-        h = self.h
-
-        print(f'injecting current to {cell}')  # cell.cell
-        stim = h.IClamp(0.5, sec=cell.soma)
-        stim.delay = self.params.sim_setup_time
-        print("stim.delay:", stim.delay)
-        stim.dur = self.params.tstop - self.params.sim_setup_time
-        print("stim.dur:", stim.dur)
-        stim.amp = self.params.background_current
-        print(stim.amp)
-
     def record_from_somas(self, cell_type):
         """
         Adds NEURON vector recorders to the somas of the specified cell types
@@ -855,6 +1015,19 @@ class OlfactoryBulb:
 
             with open(os.path.join(self.results_dir, 'input_times.pkl'), 'wb') as f:
                 cPickle.dump(result, f)
+
+        # Gather GC input event time vectors
+        all_gc_input_vecs = self.pc.py_gather(self.gc_input_vectors, 0) # this should use the new list from above
+
+        if all_gc_input_vecs is not None:
+            result = []
+            for rank_gc_input_vecs in all_gc_input_vecs:
+                for gc_seg_name, t_vec in rank_gc_input_vecs:
+                    result.append((gc_seg_name, t_vec.to_python()))
+
+            with open(os.path.join(self.results_dir, 'gc_input_times.pkl'), 'wb') as f: # use your own name for the periph spike times
+                cPickle.dump(result, f)
+
 
     def get_nseg_count(self, root_dict):
         """
