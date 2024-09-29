@@ -25,6 +25,45 @@ from olfactorybulb.paramsets.sensitivity import *
 
 debug_cells = True
 
+# import random
+# def find_apic_strings(json_data):
+#     apic_list = []
+
+#     def parse_dict(d):
+#         for key, value in d.items():
+#             if isinstance(value, dict):
+#                 parse_dict(value)
+#             elif isinstance(value, list):
+#                 parse_list(value)
+#             elif isinstance(value, str) and "apic" in value:
+#                 apic_list.append(value)
+
+#     def parse_list(lst):
+#         for item in lst:
+#             if isinstance(item, dict):
+#                 parse_dict(item)
+#             elif isinstance(item, list):
+#                 parse_list(item)
+#             elif isinstance(item, str) and "apic" in item:
+#                 apic_list.append(item)
+
+#     parse_dict(json_data)
+#     return apic_list
+
+# # Set the seed for reproducibility
+# random.seed(42)
+
+# # define directory where slice .json files are located and slice name
+# slices_dir = os.path.join('/home/ellismith/OlfactoryBulb-1/olfactorybulb/slices_local')
+# slice_name = 'DorsalColumnSlice'
+
+# # import file into a dictionary
+# with open(f'{slices_dir}/{slice_name}/{"GCs"}.json','r') as f:
+#     data = json.load(f)
+#     apic_strings = find_apic_strings(data)
+
+#sampled_apics = random.sample(apic_strings, 100)
+
 
 class OlfactoryBulb:
     """
@@ -46,6 +85,7 @@ class OlfactoryBulb:
 
         self.slice_dir = os.path.abspath(os.path.join(params.slice_dir, params.slice_name))
         self.cells = {}
+        self.cells_raw = {}
         self.inputs = []
         self.gc_inputs = [] # check all functionality related is added
         self.electrode_locations = []
@@ -114,14 +154,106 @@ class OlfactoryBulb:
                     [setattr(s, syn_attrib, attrib_value) for s in getattr(h, syn_mech)]
 
        
-        centrif_inputsegs = ['GC3[0].apic[9]',
-                        'GC3[0].apic[8]',
-                        'GC3[0].apic[7]',
-                        'GC3[0].apic[6]',
-                        'GC3[0].apic[5]',
-                        'GC3[0].apic[4]',
-                        'GC3[0].apic[3]',
-                        'GC3[0].apic[2]']
+        centrif_inputsegs = ['GC4[36].apic[5]',
+                            'GC3[54].apic[9]',
+                            'GC1[2].apic[8]',
+                            'GC1[94].apic[4]',
+                            'GC3[116].apic[1]',
+                            'GC3[104].apic[3]',
+                            'GC3[96].apic[7]',
+                            'GC3[64].apic[2]',
+                            'GC3[300].apic[3]',
+                            'GC3[50].apic[7]',
+                            'GC3[272].apic[8]',
+                            'GC1[94].apic[6]',
+                            'GC3[210].apic[1]',
+                            'GC4[4].apic[8]',
+                            'GC1[72].apic[6]',
+                            'GC4[28].apic[2]',
+                            'GC3[18].apic[4]',
+                            'GC3[18].apic[8]',
+                            'GC1[8].apic[6]',
+                            'GC5[26].apic[7]',
+                            'GC2[4].apic[8]',
+                            'GC3[196].apic[2]',
+                            'GC4[34].apic[2]',
+                            'GC1[2].apic[5]',
+                            'GC3[222].apic[6]',
+                            'GC3[86].apic[9]',
+                            'GC5[64].apic[4]',
+                            'GC3[262].apic[4]',
+                            'GC3[288].apic[6]',
+                            'GC4[28].apic[7]',
+                            'GC5[26].apic[3]',
+                            'GC3[178].apic[6]',
+                            'GC1[72].apic[9]',
+                            'GC5[28].apic[4]',
+                            'GC3[0].apic[6]',
+                            'GC3[306].apic[8]',
+                            'GC5[14].apic[1]',
+                            'GC4[40].apic[3]',
+                            'GC4[28].apic[1]',
+                            'GC3[136].apic[5]',
+                            'GC3[68].apic[0]', # here
+                            'GC5[24].apic[5]',
+                            'GC5[70].apic[8]',
+                            'GC5[34].apic[2]',
+                            'GC1[8].apic[8]',
+                            'GC5[42].apic[0]',
+                            'GC4[8].apic[8]',
+                            'GC3[142].apic[6]',
+                            'GC1[44].apic[8]',
+                            'GC3[238].apic[8]'] #50
+                            # 'GC3[112].apic[3]',
+                            # 'GC4[0].apic[0]', 
+                            # 'GC2[12].apic[7]',
+                            # 'GC3[182].apic[6]',
+                            # 'GC3[208].apic[9]',
+                            # 'GC3[58].apic[3]',
+                            # 'GC5[42].apic[3]',
+                            # 'GC3[40].apic[6]',
+                            # 'GC5[56].apic[5]',
+                            # 'GC3[122].apic[3]',
+                            # 'GC3[254].apic[8]',
+                            # 'GC5[58].apic[8]',
+                            # 'GC3[142].apic[1]',
+                            # 'GC4[32].apic[2]',
+                            # 'GC1[24].apic[3]', 
+                            # 'GC3[288].apic[0]',
+                            # 'GC3[36].apic[5]',
+                            # 'GC3[22].apic[5]',
+                            # 'GC3[264].apic[1]',
+                            # 'GC1[28].apic[9]',
+                            # 'GC3[310].apic[8]',
+                            # 'GC3[120].apic[1]',
+                            # 'GC3[40].apic[4]',
+                            # 'GC4[8].apic[0]',
+                            # 'GC1[56].apic[8]',
+                            # 'GC3[256].apic[4]',
+                            # 'GC4[18].apic[3]',
+                            # 'GC2[2].apic[3]',
+                            # 'GC3[144].apic[2]',
+                            # 'GC3[140].apic[4]',
+                            # 'GC3[90].apic[7]',
+                            # 'GC3[266].apic[2]',
+                            # 'GC3[114].apic[8]',
+                            # 'GC3[288].apic[5]',
+                            # 'GC3[276].apic[4]',
+                            # 'GC3[262].apic[7]',
+                            # 'GC3[36].apic[1]',
+                            # 'GC3[242].apic[7]',
+                            # 'GC3[256].apic[5]',
+                            # 'GC3[74].apic[6]',
+                            # 'GC3[206].apic[4]',
+                            # 'GC2[12].apic[8]',
+                            # 'GC2[2].apic[2]',
+                            # 'GC3[182].apic[0]',
+                            # 'GC5[42].apic[1]',
+                            # 'GC3[114].apic[2]',
+                            # 'GC4[36].apic[4]',
+                            # 'GC3[278].apic[4]',
+                            # 'GC3[220].apic[5]',
+                            # 'GC5[26].apic[5]'] # and
     
         # Add glomerular and GC inputs
         for time, odor_info in params.input_odors.items():
@@ -129,10 +261,8 @@ class OlfactoryBulb:
             time += params.sim_setup_time
             self.add_inputs(odor=odor_info["name"], t=time, rel_conc=odor_info["rel_conc"])
             print("between add_inputs and add_centrif")
-        for time, odor_info in params.input_odors.items():
-            # Method 1
-            time += params.sim_setup_time
-            self.add_centrifugal_inputs(t=time, centrif_inputsegs=centrif_inputsegs)
+        
+            self.add_centrifugal_inputs(t=time+80, centrif_inputsegs=centrif_inputsegs)
         
         
         # LFP
@@ -277,8 +407,7 @@ class OlfactoryBulb:
             # Odor is modeled as a gaussian spike train representing OSN spikes during inhalation
             # exhalation is assumed to not generate OSN spikes
             spike_times = self.get_gaussian_spike_train(spike_count, time, inhale_duration)
-            print("glom_spike_times:", spike_times)
-
+            
             # Create synapse point process
             seg = eval(seg_name.replace('(1)', '(.999)'))
             #print("seg:", seg)  # seg: TC5[0].apic[1](0.999)
@@ -319,64 +448,67 @@ class OlfactoryBulb:
 
 
     def stim_gc_segments(self, time, gc_input_segs, frequency):
-        """
-        Adds excitatory input to granule cell (GC) segments at a specified start time, intensity, and frequency.
+    #     """
+    #     Adds excitatory input to granule cell (GC) segments at a specified start time, intensity, and frequency.
 
-        The input is modeled as a constant frequency spike train that triggers excitatory synapses placed on 
-        the granule cell segments.
+    #     The input is modeled as a constant frequency spike train that triggers excitatory synapses placed on 
+    #     the granule cell segments.
 
-        :param time: the onset time in ms.
-        :param gc_input_segs: a list containing tuples of:
-            a) The name of the segment to stimulate as it appears on the current MPI rank
-            b) Segment gid
-            c) Segment name as it appears when there is only one rank. If not using MPI, a) and c) are the same.
-        :param intensity: 0-1 representing input intensity.
-        :param frequency: Frequency of spikes (in Hz) for the constant spike train.
+    #     :param time: the onset time in ms.
+    #     :param gc_input_segs: a list containing tuples of:
+    #         a) The name of the segment to stimulate as it appears on the current MPI rank
+    #         b) Segment gid
+    #         c) Segment name as it appears when there is only one rank. If not using MPI, a) and c) are the same.
+    #     :param intensity: 0-1 representing input intensity.
+    #     :param frequency: Frequency of spikes (in Hz) for the constant spike train.
 
-        :return: None
-        """
+    #     :return: None
+    #     """
 
         h = self.h
 
         inhale_duration = self.params.inhale_duration
 
         for seg_name, seg_gid, single_rank_seg_name in gc_input_segs:
-            # REPLACE THIS WITH OWN PERIPHERAL SPIKE TRAIN LOGIC
-            # Seed for randomization (if needed)
-            seed_source = "%s|%s|%s|%s" % (self.rnd_seed, time, single_rank_seg_name)
-            np.random.seed(self.stable_hash(seed_source))
+            print('seg_name:', seg_name)
+            print('seg_gid:', seg_gid)
+            print('single_rank_seg_name', single_rank_seg_name)
+    #         # REPLACE THIS WITH OWN PERIPHERAL SPIKE TRAIN LOGIC
+    #         # Seed for randomization (if needed)
+            seed_source = "%s|%s|%s" % (self.rnd_seed, time, single_rank_seg_name)
+            np.random.seed(self.stable_hash(seed_source)) #good to here
 
-            # Generate a constant frequency spike train
+    #         # Generate a constant frequency spike train
             spike_times = self.get_constant_spike_train(time, inhale_duration, frequency=frequency)
-            print("GC input spike times:", spike_times)
+    #         print("GC input spike times:", spike_times)
             #spike_times = np.arange(time, time + (spike_count / frequency) * 1000, 1000 / frequency)
 
-            # Check if the segment exists
-            #try:
-            #    seg = eval(seg_name.replace('(1)', '(.999)'))
-            #except IndexError:
-            #    print(f"Segment {seg_name} does not exist. Skipping.")
-            #    continue  # Skip this segment if it doesn't exist   
+    #         #Check if the segment exists
+            try:
+                seg = eval(seg_name.replace('(1)', '(.999)'))
+            except IndexError:
+                print(f"Segment {seg_name} does not exist. Skipping.")
+                continue  # Skip this segment if it doesn't exist   
 
-            # Create synapse point process
+    #         # Create synapse point process
             seg = eval(seg_name.replace('(1)', '(.999)'))
             syn = h.Exp2Syn(seg)
-            # to do: add periph input parameters to self.params
-            syn.tau1 = self.params.input_syn_tau1
-            syn.tau2 = self.params.input_syn_tau2
+    #         # to do: add periph input parameters to self.params
+    #         syn.tau1 = self.params.input_syn_tau1
+    #         syn.tau2 = self.params.input_syn_tau2
 
             if "GC" in seg_name:  # MCs
                 print("yes, GC in seg_name", seg_name)
                 delay = self.params.mc_input_delay # set self.params.gc_input_delay
-                weight = 0.2 # set self.params.gc_input_weight
+                weight = 0.5  # set self.params.gc_input_weight
             else:
                 pass
 
-            # VecStim to deliver events to synapse at vector times
+    #         # VecStim to deliver events to synapse at vector times
             ns = h.VecStim()
             ns.play(h.Vector(spike_times + delay))
 
-            # Netcon to trigger the synapse
+    #         # Netcon to trigger the synapse
             netcon = h.NetCon(
                 ns,
                 syn,
@@ -385,10 +517,10 @@ class OlfactoryBulb:
                 weight  # weight uS
             )
 
-            # Record input events
+    #         # Record input events
             input_vec = h.Vector()
             netcon.record(input_vec)
-            # TO DO: create new list to keep track of your own input vectors
+    #         # TO DO: create new list to keep track of your own input vectors
             self.gc_input_vectors.append((seg_name, input_vec))
 
             self.gc_inputs.append((syn, ns, netcon))
@@ -486,7 +618,7 @@ class OlfactoryBulb:
         :param method: One of 'Line', 'Point', or 'RC'.
         :return: an LFPsimpy LfpElectrode object
         """
-        print("electrode location:", x, y, z)
+        #print("electrode location:", x, y, z)
         return LfpElectrode(x, y, z, sampling_period, method)
         
 
@@ -574,7 +706,6 @@ class OlfactoryBulb:
         # Get all the different cell models used in the slice
         input_models = set()
         for cells in self.glom_cells.values():
-            print("glom_cells:", cells)
             for cell in cells:
                 input_models.add(cell[:cell.find('[')])
         #print("input_models:", input_models) {'TC5', 'MC5', 'MC4', 'TC4', 'TC3'}
@@ -585,7 +716,7 @@ class OlfactoryBulb:
                            for m in CellModel \
                                .select(CellModel.class_name, CellModel.tufted_dend_root) \
                                .where(CellModel.class_name.in_(list(input_models)))}
-        print("model_inputsegs = ", model_inputsegs)
+        
         return model_inputsegs
 
 
@@ -713,8 +844,7 @@ class OlfactoryBulb:
                                 .select(OdorGlom.glom_id, OdorGlom.intensity)
                                 .join(Odor)
                                 .where(Odor.name == odor)}
-        print("glom_intensities:", glom_intensities)
-
+        
         for glom_id, cells in self.glom_cells.items():
             
             glom_id = int(glom_id)
@@ -743,7 +873,7 @@ class OlfactoryBulb:
                 #print("single_rank_gid:", single_rank_gid) # 982114369
 
                 input_segs.append((seg_address, single_rank_gid, single_rank_address))
-                print("input_segs:", input_segs)
+                #print("input_segs:", input_segs)
 
             if len(input_segs) > 0:
                 glom_intensity = glom_intensities[glom_id] * rel_conc
@@ -785,7 +915,7 @@ class OlfactoryBulb:
         return times
     
     
-    def get_constant_spike_train(self, start_time=100, duration=10, frequency=10):
+    def get_constant_spike_train(self, start_time=100, duration=10, frequency=5):
         """
         Generates a spike train with a constant inter-spike interval based on the specified frequency.
 
@@ -834,8 +964,13 @@ class OlfactoryBulb:
             rank_cell = self.bn_server.rank_section_name(cell)
             print("rank_cell:", rank_cell)
 
+            # Add inputs only to cells that are on this rank
+            if rank_cell is None:
+                continue
+            
             # Construct the full segment address
-            seg_address = 'h.' + seg
+            input_seg = f".{seg.split('.')[1]}(1)" if '.' in seg else None
+            seg_address = 'h.' + rank_cell + input_seg
             print("seg_address:", seg_address) # h.TC4[0].apic[2](1)
 
             single_rank_address = 'h.' + seg
@@ -847,14 +982,15 @@ class OlfactoryBulb:
 
             # Append the segment, GID, and address to the input segments list
             gc_input_segs.append((seg_address, single_rank_gid, single_rank_address))
-            print('gc_input_segs:', gc_input_segs)
+            #print('gc_input_segs:', gc_input_segs)
 
-        # Apply centrifugal input to all segments with the same intensity
-        if len(gc_input_segs) > 0:
-            # Add synapses onto the GC soma/dendrites
-            # Apply the centrifugal intensity uniformly across all input segmentss
+        # # Apply centrifugal input to all segments with the same intensity
+            if len(gc_input_segs) > 0:
+                print('hellllllllll yeah!')
+        #     # Add synapses onto the GC soma/dendrites
+        #     # Apply the centrifugal intensity uniformly across all input segmentss
             print("calling self.stim_gc_segments for", gc_input_segs)
-            self.stim_gc_segments(t, gc_input_segs, frequency=20)
+            self.stim_gc_segments(t, gc_input_segs, frequency=8)
         
         
     def load_cells(self, cell_type):
@@ -891,7 +1027,11 @@ class OlfactoryBulb:
             # Assign cell to least busy rank
             cell_rank = min_complexity_rank
 
-            name = root['name']
+            name = root['name'] #MC5[14].soma
+            self.cells_raw[cell_type] = []
+            
+            self.cells_raw[cell_type].extend(name)
+            print("self.cells_raw:", self.cells_raw)
             name = name[0:name.find('[')]
 
             count = rank_cell_counts[cell_rank].get(name, 0)
@@ -920,6 +1060,7 @@ class OlfactoryBulb:
         # Apply the cell json file onto the base instances
         self.bn_server.init_mpi(self.pc, self.mpimap)
         self.bn_server.update_groups([group_dict])
+
 
     def add_background_input(self):
         h = self.h
