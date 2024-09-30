@@ -24,6 +24,7 @@ import pandas as pd
 from collections import defaultdict
 from scipy.stats import ttest_ind
 import pyspike as spk
+from filter import butter_bandpass, butter_bandpass_filter
 
 ######################## Loading functions ###############################
 
@@ -46,11 +47,6 @@ def get_dirs(paramset='ParameterSetBase'):
     return results_dir, paramset_dir, fig_dir
 
 
-def get_dict(paramset, paramset_dir):
-    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
-        params_dict = yaml.load(f, Loader=yaml.FullLoader)
-
-    return params_dict
 
 
 def get_params(paramset):
@@ -159,225 +155,107 @@ def get_params(paramset):
     return params_list, params_filename
 
 
+def get_params_dict(paramset_dir):
+    """Load simulation parameters from YAML file."""
+    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
+        params_dict = yaml.load(f, Loader=yaml.FullLoader)
+    return params_dict
+
+
+def load_pickle_data(file_path):
+    """Load data from a pickle file."""
+    with open(file_path, 'rb') as f:
+        return cPickle.load(f)
+
+
+def organize_events(input_times):
+    """Organize input times into a dictionary of events."""
+    events = {}
+    for entry in input_times:
+        seg_name = entry[0]
+        seg_times = events.get(seg_name, [])
+        events[seg_name] = seg_times + entry[1]
+    return events
+
+
+def filter_lfp(lfp, dt):
+    """Apply bandpass filters to the LFP signal."""
+    lfp_bp_beta = butter_bandpass_filter(lfp, 15, 40, 1 / dt * 1000, order=3)
+    lfp_bp_gamma = butter_bandpass_filter(lfp, 3, 120, 1 / dt * 1000, order=3)
+    lfp_bp_hfo = butter_bandpass_filter(lfp, 130, 200, 1 / dt * 1000, order=4)
+    return lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo
+
+
+def wavelet_transform(lfp, dt):
+    """Perform wavelet transformation on the LFP signal."""
+    wavelet = "cgau5"
+    scale_low = 3
+    scale_high = 100
+    scales = np.linspace(scale_low / dt, scale_high / dt, 50)
+    cfs, frequencies = pywt.cwt(lfp, scales, wavelet, dt / 1000.0)
+    lfp_wavelet_power = np.log(1 + abs(cfs))
+    return lfp_wavelet_power, scales, frequencies
+
+
+def average_wavelet_power(lfp_wavelet_power, dt, sniff_count, sniff_rate):
+    """Average wavelet power across sniffs."""
+    sniff_duration = int(1000 / sniff_rate)
+    skip_first_n_sniffs = 1
+    step = int(round(sniff_duration / dt))
+    
+    lfp_wavelet_power_per_sniff = np.array([
+        lfp_wavelet_power[:, i * step:(i + 1) * step - 2] 
+        for i in range(sniff_count + skip_first_n_sniffs)[skip_first_n_sniffs:]
+    ])
+    
+    lfp_wavelet_power_average = np.average(lfp_wavelet_power_per_sniff, axis=0)
+    return lfp_wavelet_power_average, step
+
+
 def load_result(paramset, lfp_pkl_file='lfp.pkl'):
     """
-    Loads the parameters, input times, spike times, voltage signals for each cell, and LFP signal.
-    Applies wavelet transformation to the LFP signal.
-    Applies band pass filter to the LFP signal in gamma and HFO ranges.
-
+    Main function to load simulation results and process LFP signal.
     """
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-    print(results_dir)
+
+    params_dict = get_params(paramset_dir)
     
-    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
-        params_dict = yaml.load(f, Loader=yaml.FullLoader)
+    dt = 0.1
+
+    sniff_count = 8
+
+    input_times = load_pickle_data(os.path.join(paramset_dir, 'input_times.pkl'))
+    input_times.sort(key=lambda row: row[0])
+    events = organize_events(input_times)
+
+    spike_times = load_pickle_data(os.path.join(paramset_dir, 'spike_times.pkl'))
+    spike_times.sort(key=lambda row: row[0])
+    spike_events = organize_events(spike_times)
+
+    gc_input_times = load_pickle_data(os.path.join(paramset_dir, 'gc_input_times.pkl'))
+    gc_input_times.sort(key=lambda row: row[0])
+    gc_input_events = organize_events(gc_input_times)
+
+    vs = load_pickle_data(os.path.join(paramset_dir, 'soma_vs.pkl'))
+    print("vs:", vs)
+    vs.sort(key=lambda row: row[0][0:2])
+
+    t, lfp = load_pickle_data(os.path.join(paramset_dir, lfp_pkl_file))
+    t = np.array(t)
+    lfp = np.array(lfp)
+    t, lfp = interpolate(t, lfp, dt)
+
+    lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo = filter_lfp(lfp, dt)
+    lfp_wavelet_power, scales, frequencies = wavelet_transform(lfp_bp_gamma, dt)
+
+    sniff_rate = params_dict.get('sniff_rate', 5)
+    lfp_wavelet_power_average, step = average_wavelet_power(lfp_wavelet_power, dt, sniff_count, sniff_rate)
+
+    t_average = t[0:step - 2]
     
-    if 'dt' in params_dict:
-        dt = params_dict['dt']
-    else:
-        dt = 0.1
-
-    if 'sniff_count' in params_dict:
-        sniff_count = params_dict['sniff_count']
-    else:
-        sniff_count = 8
-    
-    with open(os.path.join(paramset_dir, 'input_times.pkl'), 'rb') as f:
-        input_times = cPickle.load(f)
-        input_times.sort(key=lambda row: row[0])
-
-    events = {}
-    for entry in input_times:
-        seg_name = entry[0]
-        seg_times = events.get(seg_name,[])
-        events[seg_name] = seg_times + entry[1]
-
-    with open(os.path.join(paramset_dir, 'spike_times.pkl'), 'rb') as f:
-        spike_times = cPickle.load(f)
-        spike_times.sort(key=lambda row: row[0])
-
-        spike_events = {}
-        for entry in spike_times:
-            seg_name = entry[0]
-            seg_times = spike_events.get(seg_name,[])
-            spike_events[seg_name] = seg_times + entry[1]
-
-
-    with open(os.path.join(paramset_dir, 'gc_input_times.pkl'), 'rb') as f:
-        gc_input_times = cPickle.load(f)
-        gc_input_times.sort(key=lambda row: row[0])
-
-    gc_input_events = {}
-    for entry in gc_input_times:
-        seg_name = entry[0]
-        seg_times = gc_input_events.get(seg_name,[])
-        gc_input_events[seg_name] = seg_times + entry[1]
-
-    with open(os.path.join(paramset_dir, 'soma_vs.pkl'), 'rb') as f:
-        vs = cPickle.load(f)
-        print("vs:", vs)
-        vs.sort(key=lambda row: row[0][0:2])
-        
-    with open(os.path.join(paramset_dir, lfp_pkl_file), 'rb') as f:
-        t, lfp = cPickle.load(f)
-        t = np.array(t)
-        lfp = np.array(lfp)
-        t, lfp = interpolate(t,lfp, dt)
-
-
-    # Band pass filter LFP
-    lfp_bp_beta = butter_bandpass_filter(lfp, 15, 40, 1/dt*1000, order=3)  # 15, 40 Hz, order=4 default
-    lfp_bp_gamma = butter_bandpass_filter(lfp, 3, 120, 1/dt*1000, order=3) # 30, 120 
-    lfp_bp_hfo = butter_bandpass_filter(lfp, 130, 200, 1/dt*1000, order=4)
-
-    # Wavelet decomposition
-    wavelet = "cgau5"   # default "cgau5"
-    scale_low = 3   # 140 Hz default 1
-    scale_high = 100    # 20 Hz  default 32
-
-    scales = np.linspace(scale_low/dt, scale_high/dt, 50)
-
-    cfs, frequencies = pywt.cwt(lfp_bp_gamma, scales, wavelet, dt / 1000.0)  # was lfp_bp_gamma 
-    lfp_wavelet_power = np.log(1+abs(cfs))
-
-    if 'sniff_rate' in params_dict:
-        sniff_rate = params_dict['sniff_rate']
-    else:
-        sniff_rate = 5   # Hz
-    # Average spectrum across sniffs
-    sniff_duration = int(1000/sniff_rate)    # default was 200 ms
-    skip_first_n_sniffs = 1
-
-    step = int(round(sniff_duration / dt))
-
-    # range(1,9) for 8 sniffs
-    # [skip_first_n_sniffs:] creates a new Python list with all but the first element 
-    lfp_wavelet_power_per_sniff = np.array([lfp_wavelet_power[:, i*step:(i+1) * step - 2] \
-                                            for i in range(sniff_count + skip_first_n_sniffs)[skip_first_n_sniffs:]])
-    lfp_wavelet_power_average = np.average(lfp_wavelet_power_per_sniff, axis=0)
-    # lfp_wavelet_power_average_old = sum([lfp_wavelet_power[:,i*step:(i+1)*step-2] for i in range(sniff_count+skip_first_n_sniffs)[skip_first_n_sniffs:]])
-
-    # sum_temp = []
-    # for i in range(sniff_count+skip_first_n_sniffs)[skip_first_n_sniffs:]:
-    #    temp = lfp_wavelet_power[:,i*step:(i+1)*step-2]
-    #    sum_temp.append(temp)
-    #    print(np.shape(temp))
-        # print(i)
-        # temp2 = 5
-    # lfp_wavelet_power_average = sum(sum_temp)
-    t_average = t[0:step-2]
-    # took out t_average, lfp_wavelet_power_average,  before params_dict
-    return events, vs, spike_times, gc_input_events, t, lfp, lfp_bp_beta, \
-        lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, \
-        wavelet, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict
-
-
-def load_result2(paramset, lfp_pkl_file='lfp.pkl'):
-    """
-    Loads the parameters, input times, spike times, voltage signals for each cell, and LFP signal.
-    Applies wavelet transformation to the LFP signal.
-    Applies band pass filter to the LFP signal in gamma and HFO ranges.
-
-    """
-    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-    print(results_dir)
-    
-    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
-        params_dict = yaml.load(f, Loader=yaml.FullLoader)
-    
-    if 'dt' in params_dict:
-        dt = params_dict['dt']
-    else:
-        dt = 0.1
-
-    if 'sniff_count' in params_dict:
-        sniff_count = params_dict['sniff_count']
-    else:
-        sniff_count = 8
-    
-    with open(os.path.join(paramset_dir, 'input_times.pkl'), 'rb') as f:
-        input_times = cPickle.load(f)
-        input_times.sort(key=lambda row: row[0])
-
-    events = {}
-    for entry in input_times:
-        seg_name = entry[0]
-        seg_times = events.get(seg_name,[])
-        events[seg_name] = seg_times + entry[1]
-
-    with open(os.path.join(paramset_dir, 'spike_times.pkl'), 'rb') as f:
-        spike_times = cPickle.load(f)
-        spike_times.sort(key=lambda row: row[0])
-
-        spike_events = {}
-        for entry in spike_times:
-            seg_name = entry[0]
-            seg_times = spike_events.get(seg_name,[])
-            spike_events[seg_name] = seg_times + entry[1]
-
-    
-    with open(os.path.join(paramset_dir, 'soma_vs.pkl'), 'rb') as f:
-        vs = cPickle.load(f)
-        vs.sort(key=lambda row: row[0][0:2])
-        
-    with open(os.path.join(paramset_dir, lfp_pkl_file), 'rb') as f:
-        t, lfp = cPickle.load(f)
-        t = np.array(t)
-        lfp = np.array(lfp)
-        t, lfp = interpolate(t,lfp, dt)
-
-
-    # Band pass filter LFP
-    lfp_bp_beta = butter_bandpass_filter(lfp, 15, 40, 1/dt*1000, order=4)  # 15, 40 Hz, order=4 default
-    lfp_bp_gamma = butter_bandpass_filter(lfp, 30, 120, 1/dt*1000, order=4)
-    lfp_bp_hfo = butter_bandpass_filter(lfp, 130, 200, 1/dt*1000, order=4)
-
-    # Wavelet decomposition
-    wavelet = "cgau5"
-    scale_low = 15   # Small scale corresponding to higher frequencies (e.g., ~140 Hz)
-    scale_high = 90  # Large scale corresponding to lower frequencies (e.g., ~3 Hz)
-
-    # Create the scales array
-    scales = np.linspace(scale_low, scale_high, 50)
-
-    # Perform continuous wavelet transform
-    cfs, _ = pywt.cwt(lfp_bp_gamma, scales, wavelet, dt / 1000.0)
-
-    # Convert CWT scales to frequencies in Hz 
-    frequencies = pywt.scale2frequency(wavelet, scales) / (dt / 1000.0)
-
-    # Compute the wavelet power
-    lfp_wavelet_power = np.log(1 + abs(cfs))
-
-    if 'sniff_rate' in params_dict:
-        sniff_rate = params_dict['sniff_rate']
-    else:
-        sniff_rate = 5   # Hz
-    # Average spectrum across sniffs
-    sniff_duration = int(1000/sniff_rate)    # default was 200 ms
-    skip_first_n_sniffs = 1
-
-    step = int(round(sniff_duration / dt))
-
-    # range(1,9) for 8 sniffs
-    # [skip_first_n_sniffs:] creates a new Python list with all but the first element 
-    lfp_wavelet_power_per_sniff = np.array([lfp_wavelet_power[:, i*step:(i+1) * step - 2] \
-                                            for i in range(sniff_count + skip_first_n_sniffs)[skip_first_n_sniffs:]])
-    lfp_wavelet_power_average = np.average(lfp_wavelet_power_per_sniff, axis=0)
-    # lfp_wavelet_power_average_old = sum([lfp_wavelet_power[:,i*step:(i+1)*step-2] for i in range(sniff_count+skip_first_n_sniffs)[skip_first_n_sniffs:]])
-
-    # sum_temp = []
-    # for i in range(sniff_count+skip_first_n_sniffs)[skip_first_n_sniffs:]:
-    #    temp = lfp_wavelet_power[:,i*step:(i+1)*step-2]
-    #    sum_temp.append(temp)
-    #    print(np.shape(temp))
-        # print(i)
-        # temp2 = 5
-    # lfp_wavelet_power_average = sum(sum_temp)
-    t_average = t[0:step-2]
-    # took out t_average, lfp_wavelet_power_average,  before params_dict
-    return events, vs, spike_times, t, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
-        lfp_wavelet_power, scales, wavelet, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict
+    return (events, vs, spike_times, gc_input_events, t, lfp, lfp_bp_beta,
+            lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, 
+            dt, frequencies, t_average, lfp_wavelet_power_average, params_dict)
 
 
 def get_cell_info(events):
@@ -420,96 +298,6 @@ def mix_colors(color1, color2):
     return mcolors.to_hex((c1 + c2) / 2)
 
 
-
-######################### Signal processing, filtering ########################
-
-def interpolate(x, y, dt):
-    """
-    To interpolate the lfp timeseries
-    """
-    x = np.array(x)
-    y = np.array(y)
-
-    f = interp1d(x, y, kind='linear')
-
-    newx = np.arange(x.min(), x.max(), step=dt)
-    newy = f(newx)
-    return newx, newy
-
-
-def butter_bandpass(lowcut, highcut, fs, order=5):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = butter(order, [low, high], btype='band')
-    return b, a
-
-
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
-    """
-    To bandpass filter the LFP signal in certain frequency ranges
-    """
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = lfilter(b, a, data)
-    return y
-
-
-def bandpass_filter_spikes(spike_train, lowcut, highcut, fs, order=5):
-    """
-    Apply a bandpass filter to a spike train using the provided butter_bandpass_filter function.
-
-    Parameters:
-    spike_train (array): The spike train (binary, 1s at spike times).
-    lowcut (float): Lower bound of the frequency band.
-    highcut (float): Upper bound of the frequency band.
-    fs (float): Sampling frequency.
-    order (int): The order of the filter.
-
-    Returns:
-    filtered_spikes (array): Filtered spike train.
-    """
-    filtered_spikes = butter_bandpass_filter(spike_train, lowcut, highcut, fs, order=order)
-    return filtered_spikes
-
-
-def filter_spike_train(spike_train, lowcut, highcut, fs, t_start=0, t_end=1800, order=5):
-    """
-    Convert spike train to binary time series, apply bandpass filter, and return filtered spike times.
-
-    Parameters:
-    spike_train (list): The list of spike times.
-    lowcut (float): Lower bound of the frequency band.
-    highcut (float): Upper bound of the frequency band.
-    fs (float): Sampling frequency.
-    t_start (float): Start time of the simulation window.
-    t_end (float): End time of the simulation window.
-    order (int): The order of the bandpass filter.
-
-    Returns:
-    filtered_spikes (array): Filtered spike train (spike times after bandpass filtering).
-    """
-    # Calculate the total duration of the time series based on t_start and t_end
-    duration = int((t_end - t_start) * fs) + 1
-    time_series = np.zeros(duration)
-    
-    # Convert spike times to indices within the time series array
-    spike_indices = ((np.array(spike_train) - t_start) * fs).astype(int)
-    
-    # Ensure all spike indices are within bounds
-    spike_indices = spike_indices[(spike_indices >= 0) & (spike_indices < duration)]
-    
-    # Set the spike times in the binary time series
-    time_series[spike_indices] = 1
-    
-    # Bandpass filter the binary time series
-    filtered_series = butter_bandpass_filter(spike_train, lowcut, highcut, fs, order=order)
-    
-    # Convert the filtered series back to spike times
-    filtered_spikes = np.where(filtered_series > 0.1)[0] / fs + t_start
-    
-    return filtered_spikes
-
-
 def perform_normality_tests(sync_data):
     normality_results = {}
     
@@ -537,7 +325,6 @@ def calculate_means_and_stds(synchrony_results):
         means[label] = np.mean(means[label])  # Average of single values
 
     return means
-
 
 
 def perform_statistical_tests(sync_values):
@@ -574,48 +361,58 @@ def statistical_comparison(synchrony_values):
 
     return results
 
+# Plotting results
+def plot_correlations(correlations):
+    plt.figure(figsize=(15, 5))
+    
+    for (type_i, type_j), (lags, avg_corr) in correlations.items():
+        plt.plot(lags, avg_corr, label=f'{type_i} vs {type_j}')
+    
+    plt.xlabel('Lag (ms)')
+    plt.ylabel('Average Cross-Correlation')
+    plt.title('Cross-Correlation Between Cell Types')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
-def filter_and_transform_lfp(lfp, fs, nperseg, nfft, lowcut, highcut, order, if_padded):
-    """
-    Filters the LFP signal between lowcut and highcut, then applies STFT.
-    
-    Parameters:
-    lfp (array): LFP timeseries data.
-    fs (float): Sampling frequency of the LFP data.
-    lowcut (float): Low cut-off frequency for the bandpass filter.
-    highcut (float): High cut-off frequency for the bandpass filter.
-    
-    Returns:
-    f (array): Array of sample frequencies.
-    t (array): Array of segment times.
-    Zxx (2D array): STFT of lfp signal.
-    """
-    
-    # Ensure that the filter cut-off frequencies are within the valid range
 
-    print('lowcut=', lowcut)
-    print('highcut=', highcut)
-
-    nyquist = fs / 2    # fs = 10000.0
-    low = lowcut / nyquist      # 30 for gamma, 0.1 for raw
-    high = highcut / nyquist    # 80 for gamma, 200 for raw
+def plot_lfp_comparisons_scaled_height(t, lfp, lfp_bp_gamma, lfp_bp_hfo):
+    # Calculate the range of each signal
+    lfp_range = max(lfp) - min(lfp)
+    gamma_range = max(lfp_bp_gamma) - min(lfp_bp_gamma)
+    hfo_range = max(lfp_bp_hfo) - min(lfp_bp_hfo)
     
-    if not (0 < low < high < 1):
-        raise ValueError(f"Invalid filter frequencies: low={lowcut}, high={highcut}, nyquist={nyquist}")
+    # Normalize the ranges to determine relative plot heights
+    total_range = lfp_range + gamma_range + hfo_range
+    lfp_height_ratio = lfp_range / total_range
+    gamma_height_ratio = gamma_range / total_range
+    hfo_height_ratio = hfo_range / total_range
     
-    # Design a bandpass filter
-    sos = butter(order, [low, high], btype='bandpass', output='sos')
-    print("sos:", sos)
-    filtered_lfp = sosfilt(sos, lfp)
-    print("filtered lfp:", filtered_lfp)
+    # Create subplots with relative heights
+    fig, axs = plt.subplots(3, 1, figsize=(12, 8), sharex=True,
+                            gridspec_kw={'height_ratios': [lfp_height_ratio, gamma_height_ratio, hfo_height_ratio]})
     
-    # Compute the Short-Time Fourier Transform (STFT)
+    # Plot Original LFP
+    axs[0].plot(t, lfp, label='Original LFP', color='black')
+    axs[0].set_ylabel('LFP (mV)')
+    axs[0].set_title('Original LFP Signal')
+    axs[0].grid(True)
     
-    print("padded:", if_padded)
-    f, t, Sxx = stft(filtered_lfp, fs, nperseg=nperseg, nfft=nfft, padded=if_padded)
-    #f, t, Sxx = spectrogram(filtered_lfp, fs, nperseg=nperseg)
+    # Plot Bandpassed LFP (Gamma)
+    axs[1].plot(t, lfp_bp_gamma, label='Gamma Band (30-100 Hz)', color='orange')
+    axs[1].set_ylabel('LFP (mV)')
+    axs[1].set_title('Bandpassed LFP (Gamma)')
+    axs[1].grid(True)
     
-    return sos, filtered_lfp, f, t, Sxx
+    # Plot Bandpassed LFP (HFO)
+    axs[2].plot(t, lfp_bp_hfo, label='HFO Band (>100 Hz)', color='green')
+    axs[2].set_xlabel('Time (ms)')
+    axs[2].set_ylabel('LFP (mV)')
+    axs[2].set_title('Bandpassed LFP (HFO)')
+    axs[2].grid(True)
+    
+    plt.tight_layout()
+    plt.show()
 
 
 
@@ -677,195 +474,6 @@ def plot_spectrogram(ax, f, t, Sxx, nperseg, nfft, order, vmin, vmax, cmap_name=
     return cax
 
 
-def plot_lfp_spectrogram(t_lfp, faxis, Sxx):
-
-    #DELETE???
-    
-    #plt.pcolormesh(t_lfp, faxis, Sxx, cmap='jet')# 10 * log10(Sxx)
-    # Create a meshgrid of time and frequency values
-    t_mesh, f_mesh = np.meshgrid(t_lfp, faxis)
-
-    colors = cm.get_cmap('jet', 200)
-    # Plot the spectrogram
-    # Sxx -> np.log(Sxx)
-    plt.pcolormesh(t_mesh, f_mesh, np.log(Sxx), vmax=vmax, cmap=colors)  # Transpose Sxx
-    plt.colorbar()
-    plt.xlabel('Time [s]', fontsize=14)
-    plt.ylabel('Frequency [Hz]', fontsize=14)
-    plt.show()
-
-    #plt.set_ylim((20,180))
-
-
-def get_lfp_fft(paramset, ax, nperseg, nfft, vmin=None, lowcut=30, highcut=80, order=5, cmap_name='jet'):
-    """
-    Perform filtering and STFT transformation on LFP data and plot the spectrogram.
-    
-    Parameters:
-    paramset (str): Identifier for the data set to load.
-    ax (matplotlib.axes.Axes): Axes object to plot on.
-    nperseg (int): Length of each segment for STFT.
-    vmax (float): Maximum value for color scaling in spectrogram.
-    lowcut (float): Lower cutoff frequency for bandpass filter.
-    highcut (float): Upper cutoff frequency for bandpass filter.
-     order (int): Order of the filter used.
-    
-    Returns:
-    f (array): Array of sample frequencies.
-    t (array): Array of segment times.
-    Zxx (2D array): STFT of lfp signal.
-   
-    """
-    
-    # Load necessary data
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-    frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
-    print('paramset:', paramset)
-    # Check that the variable dt matches time increments in t_lfp
-    assert dt == (t_lfp[1] - t_lfp[0])
-    dt_in_sec = dt * 0.001  # dt in ms to seconds
-    
-    fs = 1 / dt_in_sec  # Sampling frequency in Hz
-    
-    # Filter and transform the LFP data
-    sos, lfp_filtered, f, t, Sxx = filter_and_transform_lfp(lfp, fs, nperseg=nperseg, nfft=nfft, lowcut=lowcut, highcut=highcut, order=order, if_padded=False)
-
-    # Plot the spectrogram
-    plot_spectrogram(ax, f, t, Sxx, nperseg=nperseg, nfft=nfft, order=order, vmin=vmin, vmax=None, cmap_name=cmap_name)
-    
-    # Return the necessary values for further analysis if needed
-    return f, t, Sxx, order
-
-
-def get_lfp_fft_stacked(paramset, order, nfft, nperseg_vmin_dict, lowcut=30, highcut=80, cmap_name='jet'):
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-    frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
-    
-    assert dt == (t_lfp[1] - t_lfp[0])
-    dt_in_sec = dt * 0.001
-    fs = 1 / dt_in_sec
-
-    fig, axes = plt.subplots(len(nperseg_vmin_dict), 1, figsize=(10, 3 * len(nperseg_vmin_dict)))
-    
-    if len(nperseg_vmin_dict) == 1:
-        axes = [axes]
-    
-    for i, (nperseg, vmin) in enumerate(nperseg_vmin_dict.items()):
-        ax = axes[i]
-        sos, filtered_lfp, f, t, Sxx = filter_and_transform_lfp(lfp, fs, nperseg=nperseg, nfft=nfft, lowcut=lowcut, highcut=highcut, order=order, if_padded=False)
-        vmin = vmin if vmin else None
-        print(vmin)
-
-        #np.log(Sxx)
-        cax = plot_spectrogram(ax, f, t, Sxx, nperseg=nperseg, nfft=nfft, order=order, vmin=vmin, vmax=-3, cmap_name=cmap_name)
-        #fig.colorbar(cax, ax=ax, label='LFP Wavelet Power ($V^2/Hz$)', pad=0.02)
-    
-    
-    plt.tight_layout()
-    plt.subplots_adjust(hspace=0.5)  # Adjust vertical space between plots
-    plt.show()
-
-
-def plot_lfp_fft(faxis, Sxx):
-    plt.plot(faxis, Sxx, color='red')       # Plot spectrum vs frequency, experimental manipulation
-    plt.xlim([0, 200])                          # Select frequency range
-    #ylim([0,0.8])
-    plt.xlabel('Frequency [Hz]')                # Label the axes
-    plt.ylabel('Power [$mV^2$/Hz]')
-    plt.show()
-
-
-def plot_sniff_average_stft(lfp, params_dict, fs, nperseg, lowcut, highcut, order):
-    """
-    Computes the average STFT across all but the first sniff of the LFP data and plots the LFP snippets 
-    along with the averaged STFT spectrogram.
-    
-    Parameters:
-    lfp (array): LFP timeseries data.
-    sniff_count (int): Total number of sniffs.
-    fs (float): Sampling frequency.
-    t_sniff (int): Duration of each sniff in milliseconds.
-    nperseg (int): Length of each segment for STFT.
-    lowcut (float): Lower cutoff frequency for bandpass filter.
-    highcut (float): Upper cutoff frequency for bandpass filter.
-    order (int): Order of the bandpass filter.
-    
-    Returns:
-    f (array): Array of sample frequencies.
-    t (array): Array of segment times.
-    avg_Sxx (2D array): Averaged STFT of LFP signal across all but the first sniff.
-    """
-    sniff_rate = params_dict['sniff_rate']
-    sniff_count = params_dict['sniff_count']
-
-    assert sniff_count > 1, "Sniff count must be greater than 1 to exclude the first sniff."
-    print("sniff rate=", sniff_rate, "Hz")
-    print("sniff count=", sniff_count)
-    
-    t_sniff = int(1000 / sniff_rate)  # Duration of each sniff in milliseconds
-    Sxx_sum = None  # Sxx_sum will accumulate STFT results for each sniff, excluding the first sniff.
-    num_sniffs = sniff_count - 1  # Exclude the first sniff
-    lfp_snippets = []
-
-    for i in range(1, sniff_count):
-        # Calculate start and end indices for the i-th sniff
-        start = int(i * t_sniff * fs / 1000)  # Convert t_sniff to samples
-        end = int((i + 1) * t_sniff * fs / 1000)
-        
-        print(f"Processing sniff {i}: LFP data indices {start} to {end}")
-        
-        # Extract and save the LFP snippet
-        lfp_snippet = lfp[start:end]
-        lfp_snippets.append(lfp_snippet)
-
-        # Filter and transform the LFP data for the current sniff
-        sos, lfp_filtered, f, t, Sxx = filter_and_transform_lfp(lfp_snippet, fs, nperseg, lowcut, highcut, order, if_padded=False)
-        
-        if Sxx_sum is None:
-            Sxx_sum = np.zeros_like(Sxx)  # creates array of zeros w same dims as Sxx, allowing for element-wise addition of STFT results
-
-        Sxx_sum += Sxx
-
-    avg_Sxx = Sxx_sum / num_sniffs
-    
-    # Verify the dimensions of the result
-    assert avg_Sxx.shape == Sxx.shape, "Averaged STFT dimensions do not match individual STFT dimensions."
-    
-    print(f"Number of sniffs averaged: {num_sniffs}")
-    print(f"Averaged STFT shape: {avg_Sxx.shape}")
-    
-    # Plot each LFP snippet to verify correct segmentation
-    fig, axes = plt.subplots(sniff_count-1, 1, figsize=(10, 12))
-    for i, snippet in enumerate(lfp_snippets):
-        axes[i].plot(np.arange(len(snippet)) / fs * 1000, snippet, color='black')  # Time in ms
-        axes[i].set_title(f'Sniff {i+1}')
-        axes[i].set_xlabel('Time (ms)')
-        axes[i].set_ylabel('LFP Amplitude')
-    fig.subplots_adjust(hspace=1)
-    
-    # Plot the averaged STFT spectrogram 
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.set_title('Average STFT Across Sniffs', fontsize=16)
-    plot_spectrogram(ax, f, t, avg_Sxx, nperseg, order, vmin=None, vmax=-6.5,  cmap_name='jet')
-    
-    #plt.tight_layout()
-    plt.show()
-    
-    return f, t, avg_Sxx
-
-
-def plot_STFT(t_lfp, lfp):
-    # DELETE
-    # compute and plot STFT
-
-    f, t, Z = signal.stft(lfp, fs=10000)    # Z is the STFT of the lfp
-    plt.axis([t_lfp[0]*0.001, t_lfp[-1]*0.001, 0, 200])   # *0.001 to convert ms to seconds
-    plt.pcolormesh(t, f, np.abs(Z), vmin=0,vmax=0.025, shading='gouraud')
-    plt.title('STFT Magnitude', fontsize=18)
-    plt.ylabel('Frequency [Hz]', fontsize=18)
-    plt.xlabel('Time [sec]', fontsize=18)
-    plt.show()
-
 
 def get_spiking_cells(spike_times):
     spiking_cells = []
@@ -903,37 +511,107 @@ def get_proportion_spiking(spike_times):
     return proportions
 
 
-def get_proportion_spiking2(spike_times):
+def get_spike_trains(trains, t_start=0, t_end=1800):
+    return [spk.SpikeTrain(spike_times=st, edges=[t_start, t_end], is_sorted=True) for st in trains]
 
-    # Initialize dictionaries to track cell type counts and spiking cells
-    cell_type_counts = defaultdict(int)
-    spiking_cells = defaultdict(int)
-    
-    # Iterate through the spike_times to count spiking and total cells
-    for seg, times in spike_times:
-        # Determine main group (MC, TC, GC)
-        if 'MC' in seg:
-            main_group = 'MC'
-        elif 'TC' in seg:
-            main_group = 'TC'
-        elif 'GC' in seg:
-            main_group = 'GC'
+
+def compute_and_plot_sync(groups, compare_within=False, t_start=0, t_end=1800):
+    plt.figure(figsize=(10, 6))
+
+    # Define cell type colors
+    cell_type_colors = {
+        'MC': 'blue',
+        'TC': 'magenta',
+        'GC': 'orange'
+    }
+
+    if compare_within:
+        # Compare within each cell type
+        for cell_type, trains in groups.items():
+            if len(trains) > 1:  # Only compute for types with more than one spike train
+                spike_trains = get_spike_trains(trains, t_start, t_end)
+                sync_profile = spk.spike_sync_profile(spike_trains)
+                plt.plot(sync_profile.x, sync_profile.y, label=f'{cell_type} within-type sync', color=cell_type_colors[cell_type])
+    else:
+        # Compare between different cell types
+        cell_type_pairs = [('GC', 'MC'), ('GC', 'TC'), ('MC', 'TC')]
+        for type1, type2 in cell_type_pairs:
+            type1_trains = get_spike_trains(groups[type1], t_start, t_end)
+            type2_trains = get_spike_trains(groups[type2], t_start, t_end)
+            combined_trains = type1_trains + type2_trains
+
+            # Mix colors for type1 vs type2 comparison
+            combined_color = tuple(
+                (np.array(matplotlib.colors.to_rgb(cell_type_colors[type1])) + 
+                 np.array(matplotlib.colors.to_rgb(cell_type_colors[type2]))) / 2
+            )
+            
+            sync_profile = spk.spike_sync_profile(combined_trains)
+            plt.plot(sync_profile.x, sync_profile.y, label=f'{type1} vs {type2}', color=combined_color)
+
+    plt.xlabel("Time (ms)")
+    plt.ylabel("Spike Synchrony")
+    plt.title("Spike Synchrony Profiles")
+    plt.legend()
+    plt.show()
+
+
+def compute_frequency_synchrony(groups, freq_ranges, fs, compare_within=False, t_start=0, t_end=1800):
+    synchrony_results = {f'{low}-{high} Hz': {} for low, high in freq_ranges}
+
+    for low, high in freq_ranges:
+        if compare_within:
+            for cell_type, trains in groups.items():
+                if len(trains) > 1:
+                    filtered_trains = [filter_spike_train(train, low, high, fs) for train in trains]
+                    spike_trains = get_spike_trains(filtered_trains, t_start, t_end)
+                    sync_value = spk.spike_sync(spike_trains)
+                    synchrony_results[f'{low}-{high} Hz'][cell_type] = sync_value
         else:
-            continue  # Skip unknown types
+            cell_type_pairs = [('GC', 'MC'), ('GC', 'TC'), ('MC', 'TC')]
+            for type1, type2 in cell_type_pairs:
+                type1_trains = [filter_spike_train(train, low, high, fs) for train in groups[type1]]
+                type2_trains = [filter_spike_train(train, low, high, fs) for train in groups[type2]]
+                combined_trains = type1_trains + type2_trains
+                spike_trains = get_spike_trains(combined_trains, t_start, t_end)
+                sync_value = spk.spike_sync(spike_trains)
+                synchrony_results[f'{low}-{high} Hz'][f'{type1} vs {type2}'] = sync_value
 
-        cell_type_counts[main_group] += 1
-        if times:  # Check if there are any spikes
-            spiking_cells[main_group] += 1
+    return synchrony_results
 
-    # Calculate proportions of spiking cells for each group
-    proportions = {}
-    for group in ['MC', 'TC', 'GC']:
-        total_cells = cell_type_counts[group]
-        spiking_cells_count = spiking_cells.get(group, 0)
-        proportion_spiking = spiking_cells_count / total_cells
-        proportions[group] = proportion_spiking
 
-    return proportions
+def plot_frequency_synchrony(synchrony_results):
+    plt.figure(figsize=(10, 6))
+
+    # Set width of the bars
+    bar_width = 0.2
+    # Define colors for each label
+    colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
+    # Get frequency ranges and the number of labels
+    freq_ranges = list(synchrony_results.keys())
+    num_labels = len(next(iter(synchrony_results.values())))  # Get number of labels from the first freq_range
+
+    # Create bars for each frequency range and label
+    for i, (freq_range, sync_values) in enumerate(synchrony_results.items()):
+        for j, (label, sync_value) in enumerate(sync_values.items()):
+            # Determine color based on whether comparing pairs or single types
+            if 'vs' in label:  # If comparing pairs, mix their colors
+                type1, type2 = label.split(' vs ')
+                mixed_color = mix_colors(colors[type1], colors[type2])
+                plt.bar(i + j * bar_width, sync_value, width=bar_width, 
+                        label=label if i == 0 else "", color=mixed_color, alpha=0.6)
+            else:  # Single types
+                plt.bar(i + j * bar_width, sync_value, width=bar_width, 
+                        label=label if i == 0 else "", color=colors.get(label, 'gray'), alpha=0.6)
+
+    # Set x-ticks to the center of the grouped bars
+    plt.xticks([i + bar_width * (num_labels - 1) / 2 for i in range(len(freq_ranges))], freq_ranges)
+
+    plt.xlabel('Frequency Range (Hz)')
+    plt.ylabel('Synchrony Measure')
+    plt.title('Synchrony across Frequency Ranges')
+    plt.legend()
+    plt.show()
 
 
 def extract_spike_times_by_cell_type(spike_times, cell_types):
@@ -1707,7 +1385,6 @@ def show_multichannel_lfp(paramset, params_short=True):
     fig_width = 27
 
 
-
     with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
         params_dict = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -1743,8 +1420,6 @@ def show_multichannel_lfp(paramset, params_short=True):
     
     plt.savefig(os.path.join(fig_dir, f'subplot{probe_n_electrodes}electrodes_{probe_spacing}spacing.jpg'), bbox_inches='tight', dpi=300)
     plt.show()
-
-
 
 
 ######################## Analyzing and plotting frequency info #########################
@@ -2158,7 +1833,36 @@ def compute_cross_correlation(spikes_i, spikes_j, dt, max_time):
     return lags, corr
 
 
+def plot_cross_correlation_avg(correlations):
+    """
+    Plot average cross-correlation for each cell type pair.
 
+    Parameters:
+    correlations (dict): Dictionary with cell type pairs and their average cross-correlations.
+    """
+    plt.figure(figsize=(12, 6))
+    
+    # Define cell type colors
+    cell_type_colors = {
+        'MC': 'blue',
+        'TC': 'magenta',
+        'GC': 'orange'
+    }
+
+    # Plot average cross-correlation values
+    for (type_i, type_j), (lags, avg_corr) in correlations.items():
+        if type_i != type_j:  # Exclude self-comparison
+            color_i = cell_type_colors.get(type_i, 'black')
+            color_j = cell_type_colors.get(type_j, 'black')
+            mixed_color = mix_colors(color_i, color_j)
+            plt.plot(lags, avg_corr, color=mixed_color, alpha=0.6, label=f'{type_i} vs {type_j}')
+    
+    plt.xlabel('Lag (ms)')
+    plt.ylabel('Average Cross-Correlation')
+    plt.title('Average Cross-Correlation Between Cell Types')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 
 def compare_cell_types(spike_times, cell_types, dt, max_time, within_type=True):
@@ -2539,79 +2243,3 @@ def plot_average_vs_paramsets(sets, paramset, fig_dir, labels=None):
     plt.subplots_adjust(wspace=0, hspace=0)
     plt.show()
 
-# STA stuff
-def calculate_sta(spike_times, lfp, win=50, dt=0.1):
-    N = len(lfp)  # Length of the LFP signal
-    
-    # Generate interpolated time points and LFP signal 
-    interp_time_points = np.arange(N) * dt
-    interp_lfp = lfp 
-    
-    # Initialize STA to hold the average LFP around each spike
-    num_points = int((2 * win + 1) / dt)  # Calculate the number of points in the window
-    STA = np.zeros(num_points)
-    
-    counter = 0  # Initialize a counter to count valid spikes
-    
-    # Iterate over the cleaned spike times and calculate the STA
-    for cell_name, times in spike_times:
-        if not times:
-            continue  # Skip cells with no spike times
-        
-        for spike_t in times:
-            # Check if spike_t is within valid range
-            if win < spike_t < N - win - 1:
-                # Generate the time points around the spike time for interpolation
-                time_points = np.arange(spike_t - win, spike_t + win + 1, dt)  # Adjusted to include full window
-                # Find the indices of these time points in the interpolated time points array
-                indices = np.searchsorted(interp_time_points, time_points)
-                # Ensure indices are within bounds
-                indices = indices[(indices >= 0) & (indices < len(interp_lfp))]
-                
-                # Get the corresponding interpolated LFP values
-                interpolated_values = interp_lfp[indices]
-                
-                # Check if interpolated_values has the correct shape
-                if interpolated_values.shape[0] == num_points:
-                    # Add the interpolated LFP values around the spike to the STA
-                    STA += interpolated_values
-                    counter += 1  # Increment the counter for each valid spike
-    
-    if counter > 0:  # Ensure there is at least one valid spike to avoid division by zero
-        # Normalize the STA by the number of valid spikes to get the average
-        STA /= counter
-    else:
-        print("No valid spikes found.")
-    
-    return STA, counter
-
-
-def plot_sta(t_lfp, lfp, STA, win):
-    plt.figure(figsize=(12, 8))
-    
-    # Plot the original LFP signal
-    plt.subplot(2, 1, 1)
-    plt.plot(t_lfp, lfp, label='Original LFP')
-    plt.title('Original Local Field Potential (LFP)')
-    plt.xlabel('Time')
-    plt.ylabel('Amplitude')
-    plt.grid(True)
-    plt.legend()
-    
-    # Calculate the length of STA
-    num_points_sta = STA.shape[0]
-    
-    # Generate time axis for STA with the correct length
-    time_axis_sta = np.linspace(-win, win, num=num_points_sta)
-    
-    # Plot the Spike-Triggered Average (STA)
-    plt.subplot(2, 1, 2)
-    plt.plot(time_axis_sta, STA, label=f'Spike-Triggered Average (STA), window = {win}')
-    plt.title(f'Spike-Triggered Average (STA), window = {win}')
-    plt.xlabel('Time around Spike (ms)')
-    plt.ylabel('Amplitude')
-    plt.grid(True)
-    plt.legend()
-    
-    plt.tight_layout()
-    plt.show()

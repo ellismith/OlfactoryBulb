@@ -2,7 +2,7 @@
 
 TITLE simple NMDA receptors
 
-: From Migliore 2013 ampanmda.mod
+: From Migliore 2013 ampanmda.mod 
 : Hines combined AMPA and NMDA and spike dependent plasticity
 
 : Modified from the original AMPA.mod, M.Migliore Jan 2003
@@ -59,7 +59,7 @@ ENDCOMMENT
 NEURON {
 	POINT_PROCESS AmpaNmdaSyn
 	RANGE R, g, mg, inmda, iampa, gnmda, gampa
-	RANGE x, mgid, ggid, srcgid, gmax, ltdinvl, ltpinvl, nmdafactor, nmdatoggle
+	RANGE x, mgid, ggid, srcgid, gmax, ltdinvl, ltpinvl, nmdafactor, nmdatoggle, ampatoggle
 	NONSPECIFIC_CURRENT i
 	GLOBAL Cdur, Alpha, Beta, E, Rinf, Rtau, ampatau
 	GLOBAL gampafactor
@@ -83,6 +83,7 @@ PARAMETER {
 	gmax = 2 (umho)		: normally 2
 	gampafactor = 0.001 (1)
 	nmdatoggle = 1		: 0 to block nmda
+	ampatoggle = 1 		: 0 to block ampa 
 	nmdafactor = 0.0035 (1)
 	ltdinvl = 250 (ms)		: longer intervals, no change
 	ltpinvl = 33.33 (ms)		: shorter interval, LTP
@@ -122,7 +123,7 @@ BREAKPOINT {
 	SOLVE release METHOD cnexp
 	gnmda = mgblock(v)*(Ron + Roff)*gmax*nmdafactor*nmdatoggle
 	inmda = gnmda*(v - E)
-	iampa = gampa*(v - E)
+	iampa = gampa*(v - E)*ampatoggle
 	i = iampa + inmda
 }
 

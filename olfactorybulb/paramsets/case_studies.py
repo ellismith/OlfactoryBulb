@@ -126,10 +126,41 @@ class GammaSignature(MC_TC_Combined_Base):
     }
 
 
-# Experiments
+# Control
 
 class GammaSignature_SetupTime(GammaSignature):
     sim_setup_time = 50  # ms
+
+
+class CentrifInput_8Hz_50segs_80ms(GammaSignature):
+    sim_setup_time = 50  # ms
+
+
+
+# Multichannel probe
+class GammaSignature_4electrodes(GammaSignature):
+    sim_setup_time = 50  # ms
+    multichannel = True
+    n_electrodes = 4
+
+class Multi_10chan_10apart(GammaSignature):
+    sim_setup_time = 50  # ms
+    multichannel = True
+    n_electrodes = 10
+    spacing = 10
+
+class Multi_10chan_200apart(GammaSignature):
+    sim_setup_time = 50  # ms
+    multichannel = True
+    n_electrodes = 10
+    spacing = 200
+
+# Experiments
+
+class GammaSignature_one_sniff(GammaSignature):
+    sim_setup_time = 50  # ms
+    sniff_count = 1
+
 
 
 class GammaSignature_NoInhibition(GammaSignature):
@@ -231,13 +262,30 @@ class OneMsTest(GammaSignature):
     description = "Test of the simulation, for build testing only"
     tstop = 1
 
+class GammaSignature_BkgdTest3(OneMsTest):
+    sim_setup_time = 50  # ms
+    background_current = 11
 
-class NMDA_block(GammaSignature):  
+
+class GammaSignature_BkgdTest2(GammaSignature):
+    sim_setup_time = 50  # ms
+    background_current = 10
+
+
+class NMDA_block_complete(GammaSignature):  
     description = "Inhibiting NMDA synapses by setting conductance to 0"
     sim_setup_time = 50  # ms
 
     def __init__(self):
         self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0  # disable NMDA
+
+class NMDA_block_partial(GammaSignature):  
+    description = "Inhibiting NMDA synapses by setting conductance to 0"
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0.2  # disable NMDA
+
 
 
 class AMPA_block(GammaSignature):  
@@ -248,21 +296,30 @@ class AMPA_block(GammaSignature):
         self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 0  # disable AMPA
 
 
-class AMPA_increase(GammaSignature):  
+class AMPA_increase_2x(GammaSignature):  
     description = "Increasing AMPA synapse activity by increasing conductance"
     sim_setup_time = 50  # ms
 
     def __init__(self):
-        self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 4  # enhance AMPA activity
+        self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 2  # enhance AMPA activity
 
 
-class NMDA_block_AMPA_increase(GammaSignature):  
+class NMDA_block_complete_AMPA_increase_2x(GammaSignature):  
     description = "Increasing AMPA synapse activity by increasing conductance"
     sim_setup_time = 50  # ms
 
     def __init__(self):
         self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0  # disable NMDA
-        self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 4  # enhance AMPA activity
+        self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 2  # enhance AMPA activity
+
+
+class NMDA_block_partial_AMPA_increase_2x(GammaSignature):  
+    description = "Increasing AMPA synapse activity by increasing conductance"
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties["AmpaNmdaSyn"]["nmdatoggle"] = 0.2  # disable NMDA
+        self.synapse_properties["AmpaNmdaSyn"]["ampatoggle"] = 2  # enhance AMPA activity
 
 
 class GammaSignature_Testing(GammaSignature):
@@ -319,12 +376,7 @@ class GammaSignature_ModifiedWithKetamine(GammaSignature):
 class ConditionalNmdaBlock(GammaSignature_Modified):
 	odors_for_block = [800, 1000, 1200]
         
-
-class BackgroundInput(GammaSignature_Modified):
-     background_current = 0.5  # nA
-
-
-
+        
 class GABA_TauOne(GammaSignature):
     sim_setup_time = 50  # ms
 
@@ -453,3 +505,47 @@ class NoExcPlasticity(GammaSignature):
     def __init__(self):
         self.synapse_properties['AmpaNmdaSyn']['ltpinvl'] = -1
         self.synapse_properties['AmpaNmdaSyn']['ltdinvl'] = -1
+
+
+class GCgmaxDouble(GammaSignature):
+    sim_setup_time = 50
+
+    def __init__(self):
+        self.synapse_properties['GabaSyn']['gmax'] = 4  # default = 2 uS
+
+class GCgmaxTriple(GammaSignature):
+    sim_setup_time = 50
+
+    def __init__(self):
+        self.synapse_properties['GabaSyn']['gmax'] = 6  # default = 2 uS
+
+
+class GCgmaxQuad(GammaSignature):
+    sim_setup_time = 50
+
+    def __init__(self):
+        self.synapse_properties['GabaSyn']['gmax'] = 8  # default = 2 uS
+
+class GCgmaxQuint(GammaSignature):
+    sim_setup_time = 50
+
+    def __init__(self):
+        self.synapse_properties['GabaSyn']['gmax'] = 10  # default = 2 uS
+
+class ExcgmaxHalf(GammaSignature):
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties['AmpaNmdaSyn']['gmax'] = 32  # default = 64 uS
+
+class Excgmax2x(GammaSignature):
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties['AmpaNmdaSyn']['gmax'] = 128  # default = 64 uS
+
+class Excgmax3x(GammaSignature):
+    sim_setup_time = 50  # ms
+
+    def __init__(self):
+        self.synapse_properties['AmpaNmdaSyn']['gmax'] = 192  # default = 64 uS

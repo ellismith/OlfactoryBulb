@@ -47,6 +47,7 @@ class OlfactoryBulbCell(IsolatedCell):
 
             self.h = h
             self.soma = self.cell.soma
+            self.apic = self.cell.apic # elli added
 
             h.init() # without this, h.run() with multiple cells produces a convergence error
 
