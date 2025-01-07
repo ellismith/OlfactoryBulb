@@ -1,4 +1,9 @@
+from collections import defaultdict
+import numpy as np
+import matplotlib.pyplot as plt
+
 from lfp_analysis_current import load_result
+
 
 
 def get_spiking_cells(spike_times):
@@ -224,7 +229,6 @@ def plot_spikes_dots(spike_times):
     plt.show()
 
 
-
 def plot_spikes_dots_condensed(spike_times):
 
     # Calculate the number of non-empty spike times to adjust figure height
@@ -277,3 +281,205 @@ def plot_spikes_dots_condensed(spike_times):
         ax.plot([-0.05, -0.05], [positions[0], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
 
     plt.show()
+
+
+
+    
+def get_spikes_hist(spiking_cells, spike_times_clean, cell_type, bin_edges=None):
+    spike_list_clean = list(zip(spiking_cells, spike_times_clean))
+    all_times = []
+
+    for seg, times in spike_list_clean:
+        if cell_type in seg:
+            all_times.extend(times)
+    
+    all_times = np.array(all_times)
+
+    # Use the provided bin_edges, or create one if not given
+    if bin_edges is None:
+        y, binedges = np.histogram(all_times, bins=50)
+    else:
+        y, binedges = np.histogram(all_times, bins=bin_edges)
+    
+    bincenters = 0.5 * (binedges[1:] + binedges[:-1])
+    binsize = bincenters[1] - bincenters[0]
+    rates = y / binsize
+
+    return bincenters, rates
+
+
+def plot_spikes_hist(ax, bincenters, rates, col='b'):
+    ax.plot(bincenters, rates, color=col)
+    ax.set_xlabel('Simulation Time [ms]', fontsize=18)
+    ax.set_ylabel('Rate', fontsize=18)
+
+
+def get_spikes_hist2(spiking_cells, spike_times_clean, cell_type, bins=50):
+    spike_list_clean = list(zip(spiking_cells, spike_times_clean))
+
+    for seg, times in spike_list_clean:
+
+        if cell_type in seg:
+            times = np.array(times)
+            y, binedges = np.histogram(times, bins=bins)  # returns the right edge of the bins
+            bincenters = 0.5*(binedges[1:]+binedges[:-1])  # better to use the center of the bins
+            binsize = bincenters[1] - bincenters[0]  # calculate the width of the bins
+            rates = y/binsize  # scale y values
+    return bincenters, rates
+
+
+
+def plot_spikes_hist_(bincenters, rates, col='b'):
+
+    bincenters, rates = get_spikes_hist(cell_name)
+
+    fig, ax = plt.subplots(1, 1, figsize=(27,6))
+
+    ax.plot(bincenters, rates, color=col)
+    #ax.set_xlim(0, 50)
+    #ax.set_ylim(0, 60)
+    ax.set_xlabel('time (s)')
+    ax.set_ylabel('Rate')
+
+    plt.show()
+
+
+def calculate_sta(spike_times, lfp, win=50, dt=0.1):
+    N = len(lfp)  # Length of the LFP signal
+    
+    # Generate interpolated time points and LFP signal 
+    interp_time_points = np.arange(N) * dt
+    interp_lfp = lfp 
+    
+    # Initialize STA to hold the average LFP around each spike
+    num_points = int((2 * win + 1) / dt)  # Calculate the number of points in the window
+    STA = np.zeros(num_points)
+    
+    counter = 0  # Initialize a counter to count valid spikes
+    
+    # Iterate over the cleaned spike times and calculate the STA
+    for cell_name, times in spike_times:
+        if not times:
+            continue  # Skip cells with no spike times
+        
+        for spike_t in times:
+            # Check if spike_t is within valid range
+            if win < spike_t < N - win - 1:
+                # Generate the time points around the spike time for interpolation
+                time_points = np.arange(spike_t - win, spike_t + win + 1, dt)  # Adjusted to include full window
+                # Find the indices of these time points in the interpolated time points array
+                indices = np.searchsorted(interp_time_points, time_points)
+                # Ensure indices are within bounds
+                indices = indices[(indices >= 0) & (indices < len(interp_lfp))]
+                
+                # Get the corresponding interpolated LFP values
+                interpolated_values = interp_lfp[indices]
+                
+                # Check if interpolated_values has the correct shape
+                if interpolated_values.shape[0] == num_points:
+                    # Add the interpolated LFP values around the spike to the STA
+                    STA += interpolated_values
+                    counter += 1  # Increment the counter for each valid spike
+    
+    if counter > 0:  # Ensure there is at least one valid spike to avoid division by zero
+        # Normalize the STA by the number of valid spikes to get the average
+        STA /= counter
+    else:
+        print("No valid spikes found.")
+    
+    return STA, counter
+
+def plot_sta(t_lfp, lfp, STA, win):
+    plt.figure(figsize=(12, 8))
+    
+    # Plot the original LFP signal
+    plt.subplot(2, 1, 1)
+    plt.plot(t_lfp, lfp, label='Original LFP')
+    plt.title('Original Local Field Potential (LFP)')
+    plt.xlabel('Time')
+    plt.ylabel('Amplitude')
+    plt.grid(True)
+    plt.legend()
+    
+    # Calculate the length of STA
+    num_points_sta = STA.shape[0]
+    
+    # Generate time axis for STA with the correct length
+    time_axis_sta = np.linspace(-win, win, num=num_points_sta)
+    
+    # Plot the Spike-Triggered Average (STA)
+    plt.subplot(2, 1, 2)
+    plt.plot(time_axis_sta, STA, label=f'Spike-Triggered Average (STA), window = {win}')
+    plt.title(f'Spike-Triggered Average (STA), window = {win}')
+    plt.xlabel('Time around Spike (ms)')
+    plt.ylabel('Amplitude')
+    plt.grid(True)
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.show()
+
+
+def show_psth(spiking_cells, spike_times_clean):
+    fig, ax = plt.subplots(3,1, figsize=(27,6))
+    spiking_mcs = []
+    spiking_tcs = []
+    spiking_gcs = []
+    for cell in spiking_cells:
+
+        bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, cell)
+        if 'MC' in cell:
+            idx = 0
+            col = 'blue'
+            spiking_mcs.append(cell)
+        if 'TC' in cell:
+            idx = 1
+            col = 'magenta'
+            spiking_tcs.append(cell)
+        if 'GC' in cell:
+            idx = 2
+            col = 'orange'
+            spiking_gcs.append(cell)
+
+        ax[idx].plot(bincenters, rates, color=col)
+
+        #plt.plot(times, [i]*len(times),col+'|',ms=10,label=seg)
+        ax[idx].set_ylabel("%s Spike Histogram" % cell)
+        ax[idx].set_title(cell[:2])
+
+    plt.tight_layout()
+    plt.show()
+    return spiking_mcs, spiking_tcs, spiking_gcs
+
+
+def plot_psth(spiking_cells, spike_times_clean, cell_types=['MC', 'TC', 'GC']):
+    fig, ax = plt.subplots(3, 1, figsize=(27, 6))
+    
+    # Dictionary to store aggregated histograms for each cell type
+    aggregated_histograms = {cell_type: [] for cell_type in cell_types}
+    spiking_cells_dict = {cell_type: [] for cell_type in cell_types}
+    colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
+
+    for cell in spiking_cells:
+        bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, cell)
+        for cell_type in cell_types:
+            if cell_type in cell:
+                spiking_cells_dict[cell_type].append(cell)
+                aggregated_histograms[cell_type].append(rates)
+                break
+
+    for idx, cell_type in enumerate(cell_types):
+        if aggregated_histograms[cell_type]:
+            mean_rates = np.mean(aggregated_histograms[cell_type], axis=0)
+            ax[idx].plot(bincenters, mean_rates, color=colors[cell_type], linewidth=2)
+            ax[idx].set_ylabel(f"{cell_type} Spike Histogram")
+            ax[idx].set_title(f"{cell_type} Histograms")
+
+    plt.tight_layout()
+    plt.show()
+    
+    return tuple(spiking_cells_dict[cell_type] for cell_type in cell_types)
+
+
+
+
