@@ -8,7 +8,7 @@ except:
 
 from scipy import signal
 from scipy.interpolate import interp1d
-from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
+from scipy.signal import butter, lfilter, filtfilt
 
 
 ############## INTERPOLATION, DOWNSAMPLING, FILTERING ################################
@@ -68,6 +68,38 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
     y = lfilter(b, a, data)
     return y
+
+# Define bandpass filter function with adjustable filter type and dt in milliseconds
+def bandpass_filter(data, lowcut, highcut, dt, order=5, filter_type='filtfilt'):
+    """
+    Bandpass filters the data between lowcut and highcut frequencies.
+    
+    Parameters:
+    - data: array-like, the signal to be filtered
+    - lowcut: float, lower cutoff frequency in Hz
+    - highcut: float, higher cutoff frequency in Hz
+    - dt: float, time step in milliseconds
+    - order: int, order of the filter
+    - filter_type: str, 'filtfilt' (zero-phase filtering) or 'lfilter' (causal filtering)
+    
+    Returns:
+    - y: array-like, the bandpass-filtered signal
+    """
+    fs = 1000.0 / dt  # Convert dt in ms to sampling frequency in Hz
+    nyquist = 0.5 * fs
+    low = lowcut / nyquist
+    high = highcut / nyquist
+    b, a = butter(order, [low, high], btype='band')
+    
+    if filter_type == 'filtfilt':
+        y = filtfilt(b, a, data)
+    elif filter_type == 'lfilter':
+        y = lfilter(b, a, data)
+    else:
+        raise ValueError("filter_type must be 'filtfilt' or 'lfilter'")
+    
+    return y
+
 
 
 def filter_lfp(lfp, dt):
@@ -133,5 +165,58 @@ def filter_spike_train(spike_train, lowcut, highcut, fs, t_start=0, t_end=1800, 
     
     return filtered_spikes
 
+
+# Define function to plot bandpassed signals
+def plot_bandpassed_signals(lfp_signal, t, dt, filter_type='filtfilt', order=5):
+    """
+    Plots the original LFP signal and its bandpass-filtered versions in different frequency bands.
+    
+    Parameters:
+    - lfp_signal: array-like, original LFP signal
+    - t: array-like, time vector corresponding to the signal
+    - dt: float, time step in milliseconds
+    - filter_type: str, filter type ('filtfilt' or 'lfilter') used for bandpass filtering
+    - order: int, order of the bandpass filter
+    """
+    # Bandpass filter for different frequency ranges
+    low_freq_signal = bandpass_filter(lfp_signal, 3, 40, dt, order=order, filter_type=filter_type)
+    medium_freq_signal = bandpass_filter(lfp_signal, 40, 100, dt, order=order, filter_type=filter_type)
+    high_freq_signal = bandpass_filter(lfp_signal, 100, 200, dt, order=order, filter_type=filter_type)
+
+    # Create subplots
+    fig, ax = plt.subplots(4, 1, figsize=(12, 8), sharex=True)
+
+    # Plot the original LFP signal
+    ax[0].plot(t, lfp_signal, color='black', label='Original LFP Signal')
+    ax[0].set_title('Original LFP Signal')
+    ax[0].set_ylabel('Amplitude')
+    #ax[0].set_ylim(-1.1, 1.1)
+    ax[0].legend(loc='upper right')
+
+    # Plot the low-frequency bandpassed signal
+    ax[1].plot(t, low_freq_signal, color='blue', label='3-40 Hz Bandpass')
+    ax[1].set_title(f'Low Frequency (3 - 40 Hz) Bandpass | Filter: {filter_type}, Order: {order}')
+    ax[1].set_ylabel('Amplitude')
+    #ax[1].set_ylim(-1.1, 1.1)
+    ax[1].legend(loc='upper right')
+
+    # Plot the medium-frequency bandpassed signal
+    ax[2].plot(t, medium_freq_signal, color='green', label='100-200 Hz Bandpass')
+    ax[2].set_title(f'Medium Frequency (100 - 200 Hz) Bandpass | Filter: {filter_type}, Order: {order}')
+    ax[2].set_ylabel('Amplitude')
+    #ax[2].set_ylim(-1.1, 1.1)
+    ax[2].legend(loc='upper right')
+
+    # Plot the high-frequency bandpassed signal
+    ax[3].plot(t, high_freq_signal, color='red', label='100-200 Hz Bandpass')
+    ax[3].set_title(f'High Frequency (100-200 Hz) Bandpass | Filter: {filter_type}, Order: {order}')
+    ax[3].set_xlabel('Time (s)')
+    ax[3].set_ylabel('Amplitude')
+    #ax[3].set_ylim(-1.1, 1.1)
+    ax[3].legend(loc='upper right')
+
+    # Adjust layout and show plot
+    plt.tight_layout()
+    plt.show()
 
 
