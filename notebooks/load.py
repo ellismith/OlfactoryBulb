@@ -276,3 +276,46 @@ def get_cell_info(events):
             gcs.append(seg)
 
     return mcs, tcs, gcs
+
+
+
+
+def separate_glomcell_data(vs, glomcell_list1, glomcell_list2):
+    # Initialize lists to store data for each glomcell list
+    data_list1 = []
+    data_list2 = []
+
+    # Iterate over the vs data to check if cell name matches any in the lists
+    for entry in vs:
+        # Extract the cell name and voltage trace from the entry
+        # Assuming the cell name is the first element and voltage trace is the second element
+        cell = entry[0]
+        time = entry[1]
+        voltage_trace = entry[2]
+        
+        # Extract cell name (without the ".soma" part) to compare with the glomcell lists
+        cell_name = cell.split(".")[0]
+        
+        # If the cell name is in glomcell_list1, add it to data_list1
+        if cell_name in glomcell_list1:
+            data_list1.append((cell, time, voltage_trace))
+        
+        # If the cell name is in glomcell_list2, add it to data_list2
+        if cell_name in glomcell_list2:
+            data_list2.append((cell, time, voltage_trace))
+    
+    return data_list1, data_list2
+
+
+# Function to get indices of cells in raw lists that are in the target lists
+def get_raw_indices(raw_list, target_list):
+    return [raw_list.index(cell) for cell in target_list if cell in raw_list]
+
+    MCs_raw = ["MC4[0]", "MC4[2]", "MC5[0]", "MC5[10]", "MC5[12]", "MC5[14]", "MC5[2]", "MC5[4]", "MC5[6]", "MC5[8]"]
+    TCs_raw = [
+    "TC3[0]", "TC3[2]", "TC3[4]", "TC3[6]",
+    "TC4[0]", "TC4[10]", "TC4[12]", "TC4[14]", "TC4[16]", 
+    "TC4[2]", "TC4[4]", "TC4[6]", "TC4[8]",
+    "TC5[0]", "TC5[10]", "TC5[12]", "TC5[14]", 
+    "TC5[16]", "TC5[18]", "TC5[20]", "TC5[2]", 
+    "TC5[4]", "TC5[6]", "TC5[8]"]
