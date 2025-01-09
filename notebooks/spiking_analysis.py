@@ -283,6 +283,26 @@ def plot_spikes_dots_condensed(spike_times):
     plt.show()
 
 
+def extract_spike_times_by_cell_type(spike_times, cell_types):
+    """
+    Extract spike times for each cell type from the spike_times data.
+
+    Parameters:
+    - spike_times: List of tuples containing cell name and spike times.
+    - cell_types: List of cell types to extract.
+
+    Returns:
+    - cell_type_spike_times: Dictionary with cell types as keys and lists of spike times as values.
+    """
+    cell_type_spike_times = defaultdict(list)
+
+    for cell, spikes in spike_times:
+        for cell_type in cell_types:
+            if cell_type in cell:
+                cell_type_spike_times[cell_type].append(spikes)
+                break
+    
+    return cell_type_spike_times
 
     
 def get_spikes_hist(spiking_cells, spike_times_clean, cell_type, bin_edges=None):
@@ -479,6 +499,8 @@ def plot_psth(spiking_cells, spike_times_clean, cell_types=['MC', 'TC', 'GC']):
     plt.show()
     
     return tuple(spiking_cells_dict[cell_type] for cell_type in cell_types)
+
+
 
 
 
