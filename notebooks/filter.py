@@ -11,7 +11,7 @@ from scipy.interpolate import interp1d
 from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
 
 
-######################### Signal processing, filtering ########################
+############## INTERPOLATION, DOWNSAMPLING, FILTERING ################################
 
 def interpolate(x, y, dt):
     """
@@ -25,6 +25,32 @@ def interpolate(x, y, dt):
     newx = np.arange(x.min(), x.max(), step=dt)
     newy = f(newx)
     return newx, newy
+
+
+def downsample_lfp(t, lfp, n):
+    """
+    Downsamples the LFP signal and time array by keeping every nth data point.
+
+    Parameters:
+    t (array-like): Array of time points corresponding to the LFP signal.
+    lfp (array-like): Array of LFP signal values.
+    n (int): The downsampling factor. Keeps every nth data point.
+
+    Returns:
+    tuple: Downsampled time array and LFP array as (t_downsampled, lfp_downsampled).
+    """
+    if n <= 0:
+        raise ValueError("Downsampling factor 'n' must be greater than 0.")
+    
+    if len(t) != len(lfp):
+        raise ValueError("Time array and LFP array must have the same length.")
+    
+    # Downsample by selecting every nth element
+    t_downsampled = t[::n]
+    lfp_downsampled = lfp[::n]
+
+    return t_downsampled, lfp_downsampled
+
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
@@ -42,6 +68,14 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
     y = lfilter(b, a, data)
     return y
+
+
+def filter_lfp(lfp, dt):
+    """Apply bandpass filters to the LFP signal."""
+    lfp_bp_beta = butter_bandpass_filter(lfp, 15, 40, 1 / dt * 1000, order=3)
+    lfp_bp_gamma = butter_bandpass_filter(lfp, 3, 120, 1 / dt * 1000, order=3)
+    lfp_bp_hfo = butter_bandpass_filter(lfp, 130, 200, 1 / dt * 1000, order=4)
+    return lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo
 
 
 def bandpass_filter_spikes(spike_train, lowcut, highcut, fs, order=5):
@@ -100,44 +134,4 @@ def filter_spike_train(spike_train, lowcut, highcut, fs, t_start=0, t_end=1800, 
     return filtered_spikes
 
 
-def filter_and_transform_lfp(lfp, fs, nperseg, nfft, lowcut, highcut, order, if_padded):
-    """
-    Filters the LFP signal between lowcut and highcut, then applies STFT.
-    
-    Parameters:
-    lfp (array): LFP timeseries data.
-    fs (float): Sampling frequency of the LFP data.
-    lowcut (float): Low cut-off frequency for the bandpass filter.
-    highcut (float): High cut-off frequency for the bandpass filter.
-    
-    Returns:
-    f (array): Array of sample frequencies.
-    t (array): Array of segment times.
-    Zxx (2D array): STFT of lfp signal.
-    """
-    
-    # Ensure that the filter cut-off frequencies are within the valid range
 
-    print('lowcut=', lowcut)
-    print('highcut=', highcut)
-
-    nyquist = fs / 2    # fs = 10000.0
-    low = lowcut / nyquist      # 30 for gamma, 0.1 for raw
-    high = highcut / nyquist    # 80 for gamma, 200 for raw
-    
-    if not (0 < low < high < 1):
-        raise ValueError(f"Invalid filter frequencies: low={lowcut}, high={highcut}, nyquist={nyquist}")
-    
-    # Design a bandpass filter
-    sos = butter(order, [low, high], btype='bandpass', output='sos')
-    print("sos:", sos)
-    filtered_lfp = sosfilt(sos, lfp)
-    print("filtered lfp:", filtered_lfp)
-    
-    # Compute the Short-Time Fourier Transform (STFT)
-    
-    print("padded:", if_padded)
-    f, t, Sxx = stft(filtered_lfp, fs, nperseg=nperseg, nfft=nfft, padded=if_padded)
-    #f, t, Sxx = spectrogram(filtered_lfp, fs, nperseg=nperseg)
-    
-    return sos, filtered_lfp, f, t, Sxx
