@@ -270,3 +270,5 @@ def statistical_comparison(synchrony_values):
             results[f'{type1} vs {type2}'] = (stat, p_value)
 
     return results
+
+
