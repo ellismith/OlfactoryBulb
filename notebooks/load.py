@@ -1,0 +1,278 @@
+import numpy as np
+
+try:
+    import cPickle
+except:
+    import pickle as cPickle
+
+import os
+import yaml
+
+######################## Loading functions ###############################
+
+def get_dirs(paramset='ParameterSetBase'):
+    cwd = os.getcwd()
+    ob_dir = os.path.dirname(cwd)
+
+    results_dir = os.path.join(ob_dir, 'results')
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+
+    paramset_dir = os.path.join(results_dir, paramset)
+    if not os.path.exists(paramset_dir):
+        os.makedirs(paramset_dir)
+
+    fig_dir = os.path.join(paramset_dir, 'figures')
+    if not os.path.exists(fig_dir):
+        os.makedirs(fig_dir)
+
+    return results_dir, paramset_dir, fig_dir
+
+
+def get_dict(paramset, paramset_dir):
+    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
+        params_dict = yaml.load(f, Loader=yaml.FullLoader)
+
+    return params_dict
+
+
+def get_params(paramset):
+    """
+    Returns list of parameters for that simulation run
+    """
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+
+    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
+        params_dict = yaml.load(f, Loader=yaml.FullLoader)
+
+    setup_time = params_dict['setup_time']
+    rel_conc_scale = params_dict['rel_conc_scale']
+    gaba_tau1 = params_dict['gaba_tau1']
+    gaba_tau2 = params_dict['gaba_tau2']
+    mc_input_weight = params_dict['mc_input_weight']
+    tc_input_weight = params_dict['tc_input_weight']
+    mc_gap_junction_gmax = params_dict['mc_gap_junction_gmax']
+    tc_gap_junction_gmax = params_dict['tc_gap_junction_gmax']
+    nmda_toggle = params_dict['nmda_toggle']
+    gaba_gmax = params_dict['gaba_gmax']
+    ltpinvl = params_dict['ltpinvl']
+    ltdinvl = params_dict['ltdinvl']
+    ampa_nmda_gmax = params_dict['ampa_nmda_gmax']
+    background_current = params_dict['background_current']
+    max_firing_rate = params_dict['max_firing_rate']
+    sniff_rate = params_dict['sniff_rate']
+    electrode_location = params_dict['electrode_location']
+    #probe_x = params_dict['probe_x']
+    #probe_y = params_dict['probe_y']
+    #probe_z = params_dict['probe_z']
+    #probe_n_electrodes = params_dict['probe_n_electrodes']
+    #probe_spacing = params_dict['probe_spacing']
+    #electrode_location2 = params_dict['electrode_location2']
+    if 'dt' in params_dict:
+        dt = params_dict['dt']
+    else:
+        dt = 0.1
+    if 'sniff_count' in params_dict:
+        sniff_count = params_dict['sniff_count']
+    else:
+        sniff_count = 8
+    
+    #if 'electrode_location' in params_dict:  # Check if 'electrode_location' is None
+    #    electrode_location = params_dict['electrode_location']
+    #if 'electrode_location2' in params_dict:  # Check if 'electrode_location' is None
+    #    electrode_location2 = params_dict['electrode_location2']
+    #else:
+    #    pass
+
+    params_list = f'setup_time={setup_time}, gaba_gmax={gaba_gmax}, gaba_tau1={gaba_tau1}, gaba_tau2={gaba_tau2}, mc_input_weight={mc_input_weight}, '\
+                  f'tc_input_weight={tc_input_weight},\n mc_gap_junction_gmax={mc_gap_junction_gmax}, tc_gap_junction_gmax={tc_gap_junction_gmax}, '\
+                  f'nmda_toggle={nmda_toggle}, ampa_nmda_gmax={ampa_nmda_gmax}, max_firing_rate={max_firing_rate}, sniff_rate={sniff_rate}, '\
+                  f'dt={dt}, sniff_count={sniff_count}, background_current={background_current}, electrode_location={electrode_location}, '
+                  #f'probe_x={probe_x}, probe_y={probe_y}, probe_z={probe_z}, probe_n_electrodes={probe_n_electrodes}, probe_spacing={probe_spacing}'
+
+    params_filename = ''
+
+    if 'tau' in paramset.lower():
+        params_filename = f'tau1={gaba_tau1}, tau2={gaba_tau2}, setup_time={setup_time}'
+    elif 'modified' in paramset.lower():
+        params_filename = f'nmda_toggle={nmda_toggle}, gaba_gmax={gaba_gmax}, \
+            ampa_nmda_gmax={ampa_nmda_gmax}, mc_gj_gmax={mc_gap_junction_gmax}, \
+                tc_gj_gmax={tc_gap_junction_gmax}, setup_time={setup_time}'
+    #elif 'setup' in paramset.lower():
+        #params_filename = f'setup_time={setup_time}'
+    elif 'plasticity' in paramset.lower():
+        params_filename = f'ltpinvl={ltpinvl}, ltdinvl={ltdinvl}, setup_time={setup_time}'
+    elif 'only' in paramset.lower():
+        params_filename = f'mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, \
+            gaba_gmax={gaba_gmax}, ampa_nmda_gmax={ampa_nmda_gmax}, setup_time={setup_time}'
+    elif 'unconnected' in paramset.lower():
+        params_filename = f'mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, \
+            gaba_gmax={gaba_gmax}, ampa_nmda_gmax={ampa_nmda_gmax}, setup_time={setup_time}'
+    elif 'inh' in paramset.lower():
+        params_filename = f'gaba_gmax={gaba_gmax}, setup_time={setup_time}'
+    elif 'excandelec' in paramset.lower():
+        params_filename = f'ampa_nmda_gmax={ampa_nmda_gmax}, mc_gj_gmax={mc_gap_junction_gmax}, \
+            tc_gj_gmax={tc_gap_junction_gmax}, setup_time={setup_time}'
+    elif 'exc' in paramset.lower():
+        params_filename = f'ampa_nmda_gmax={ampa_nmda_gmax}, setup_time={setup_time}'
+    elif 'trode' in paramset.lower():
+        params_filename = f'electrode_location={electrode_location}'   
+    elif 'elec' in paramset.lower():
+        params_filename = f'mc_gj_gmax={mc_gap_junction_gmax}, tc_gj_gmax={tc_gap_junction_gmax}, \
+            setup_time={setup_time}'
+    elif 'nmda' in paramset.lower():
+        params_filename = f'nmda_toggle={nmda_toggle}'
+    elif 'background_current' in paramset.lower():
+        print('YES')
+        params_filename = f'background_current={background_current}'
+    elif 'input' in paramset.lower():
+        params_filename = f'mc_input_weight={mc_input_weight}, \
+            tc_input_weight={tc_input_weight}, setup_time={setup_time}'
+    elif 'sniff_rate' in paramset.lower():
+        params_filename = f'sniff_rate={sniff_rate}'
+    elif 'dt' in paramset.lower():
+        params_filename = f'dt={dt}'  
+    elif 'sniff_count' in paramset.lower():
+        params_filename = f'sniff_count={sniff_count}' 
+    elif 'probe' in paramset.lower():
+        params_filename = f'probe_location_start={probe_x},{probe_y},{probe_z}' 
+    else:
+        params_filename = 'default'
+
+    return params_list, params_filename
+
+
+def get_params_dict(paramset_dir):
+    """Load simulation parameters from YAML file."""
+    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
+        params_dict = yaml.load(f, Loader=yaml.FullLoader)
+    return params_dict
+
+
+def load_pickle_data(file_path):
+    """Load data from a pickle file."""
+    with open(file_path, 'rb') as f:
+        return cPickle.load(f)
+
+
+def organize_events(input_times):
+    """Organize input times into a dictionary of events."""
+    events = {}
+    for entry in input_times:
+        seg_name = entry[0]
+        seg_times = events.get(seg_name, [])
+        events[seg_name] = seg_times + entry[1]
+    return events
+
+
+def load_result(paramset, lfp_pkl_file='lfp.pkl'):
+    """
+    Loads the parameters, input times, spike times, voltage signals for each cell, and LFP signal.
+    Applies wavelet transformation to the LFP signal.
+    Applies band pass filter to the LFP signal in gamma and HFO ranges.
+
+    """
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+    print(results_dir)
+    
+    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
+        params_dict = yaml.load(f, Loader=yaml.FullLoader)
+    
+    if 'dt' in params_dict:
+        dt = params_dict['dt']
+    else:
+        dt = 0.1
+
+    if 'sniff_count' in params_dict:
+        sniff_count = params_dict['sniff_count']
+    else:
+        sniff_count = 8
+    
+    with open(os.path.join(paramset_dir, 'input_times.pkl'), 'rb') as f:
+        input_times = cPickle.load(f)
+        input_times.sort(key=lambda row: row[0])
+
+    events = {}
+    for entry in input_times:
+        seg_name = entry[0]
+        seg_times = events.get(seg_name,[])
+        events[seg_name] = seg_times + entry[1]
+
+    with open(os.path.join(paramset_dir, 'spike_times.pkl'), 'rb') as f:
+        spike_times = cPickle.load(f)
+        spike_times.sort(key=lambda row: row[0])
+
+        spike_events = {}
+        for entry in spike_times:
+            seg_name = entry[0]
+            seg_times = spike_events.get(seg_name,[])
+            spike_events[seg_name] = seg_times + entry[1]
+
+    
+    with open(os.path.join(paramset_dir, 'soma_vs.pkl'), 'rb') as f:
+        vs = cPickle.load(f)
+        vs.sort(key=lambda row: row[0][0:2])
+        
+    with open(os.path.join(paramset_dir, lfp_pkl_file), 'rb') as f:
+        t, lfp = cPickle.load(f)
+        t = np.array(t)
+        lfp = np.array(lfp)
+        t, lfp = interpolate(t,lfp, dt)
+
+
+    # Band pass filter LFP
+    lfp_bp_beta = butter_bandpass_filter(lfp, 15, 40, 1/dt*1000, order=3)  # 15, 40 Hz, order=4 default
+    lfp_bp_gamma = butter_bandpass_filter(lfp, 30, 120, 1/dt*1000, order=3)
+    lfp_bp_hfo = butter_bandpass_filter(lfp, 130, 200, 1/dt*1000, order=3)
+
+    # Wavelet decomposition
+    wavelet = "cgau5"
+    scale_low = 1     # 140 Hz
+    scale_high = 32   # 20 Hz
+
+    scales = np.linspace(scale_low/dt, scale_high/dt, 50)
+
+    cfs, frequencies = pywt.cwt(lfp, scales, wavelet, dt / 1000.0)  # was lfp_bp_gamma 
+    lfp_wavelet_power = np.log(1+abs(cfs))
+
+    if 'sniff_rate' in params_dict:
+        sniff_rate = params_dict['sniff_rate']
+    else:
+        sniff_rate = 5   # Hz
+    # Average spectrum across sniffs
+    sniff_duration = int(1000/sniff_rate)    # default was 200 ms
+    skip_first_n_sniffs = 1
+
+    step = int(round(sniff_duration / dt))
+
+    # range(1,9) for 8 sniffs
+    # [skip_first_n_sniffs:] creates a new Python list with all but the first element 
+    lfp_wavelet_power_per_sniff = np.array([lfp_wavelet_power[:, i*step:(i+1) * step - 2] \
+                                            for i in range(sniff_count + skip_first_n_sniffs)[skip_first_n_sniffs:]])
+    lfp_wavelet_power_average = np.average(lfp_wavelet_power_per_sniff, axis=0)
+
+    t_average = t[0:step-2]
+    # took out t_average, lfp_wavelet_power_average,  before params_dict
+    
+    return events, vs, spike_times, t, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, scales, wavelet, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict
+
+
+
+def get_cell_info(events):
+
+    events_ = [(seg, times) for seg, times in events.items()]
+    events_.sort(key=lambda row: row[0])
+
+    mcs = []
+    tcs = []
+    gcs = []
+    for seg, times in events_:
+        if 'MC' in seg:
+            mcs.append(seg)
+        if 'TC' in seg:
+            tcs.append(seg)
+        if 'GC' in seg:
+            gcs.append(seg)
+
+    return mcs, tcs, gcs
