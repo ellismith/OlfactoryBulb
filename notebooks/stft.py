@@ -17,6 +17,48 @@ from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
 #from scipy.signal import ShortTimeFFT
 
 
+def filter_and_transform_lfp(lfp, fs, nperseg, nfft, lowcut, highcut, order, if_padded):
+    """
+    Filters the LFP signal between lowcut and highcut, then applies STFT.
+    
+    Parameters:
+    lfp (array): LFP timeseries data.
+    fs (float): Sampling frequency of the LFP data.
+    lowcut (float): Low cut-off frequency for the bandpass filter.
+    highcut (float): High cut-off frequency for the bandpass filter.
+    
+    Returns:
+    f (array): Array of sample frequencies.
+    t (array): Array of segment times.
+    Zxx (2D array): STFT of lfp signal.
+    """
+    
+    # Ensure that the filter cut-off frequencies are within the valid range
+
+    print('lowcut=', lowcut)
+    print('highcut=', highcut)
+
+    nyquist = fs / 2    # fs = 10000.0
+    low = lowcut / nyquist      # 30 for gamma, 0.1 for raw
+    high = highcut / nyquist    # 80 for gamma, 200 for raw
+    
+    if not (0 < low < high < 1):
+        raise ValueError(f"Invalid filter frequencies: low={lowcut}, high={highcut}, nyquist={nyquist}")
+    
+    # Design a bandpass filter
+    sos = butter(order, [low, high], btype='bandpass', output='sos')
+    print("sos:", sos)
+    filtered_lfp = sosfilt(sos, lfp)
+    print("filtered lfp:", filtered_lfp)
+    
+    # Compute the Short-Time Fourier Transform (STFT)
+    
+    print("padded:", if_padded)
+    f, t, Sxx = stft(filtered_lfp, fs, nperseg=nperseg, nfft=nfft, padded=if_padded)
+    #f, t, Sxx = spectrogram(filtered_lfp, fs, nperseg=nperseg)
+    
+    return sos, filtered_lfp, f, t, Sxx
+
 
 def get_lfp_fft(paramset, ax, nperseg, nfft, vmin=None, lowcut=30, highcut=80, order=5, cmap_name='jet'):
     """
@@ -52,39 +94,10 @@ def get_lfp_fft(paramset, ax, nperseg, nfft, vmin=None, lowcut=30, highcut=80, o
     sos, lfp_filtered, f, t, Sxx = filter_and_transform_lfp(lfp, fs, nperseg=nperseg, nfft=nfft, lowcut=lowcut, highcut=highcut, order=order, if_padded=False)
 
     # Plot the spectrogram
-    plot_spectrogram(ax, f, t, Sxx, nperseg=nperseg, nfft=nfft, order=order, vmin=vmin, vmax=None, cmap_name=cmap_name)
+    #plot_spectrogram(ax, f, t, Sxx, nperseg=nperseg, nfft=nfft, order=order, vmin=vmin, vmax=None, cmap_name=cmap_name)
     
     # Return the necessary values for further analysis if needed
     return f, t, Sxx, order
-
-
-def get_lfp_fft_stacked(paramset, order, nfft, nperseg_vmin_dict, lowcut=30, highcut=80, cmap_name='jet'):
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-    frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
-    
-    assert dt == (t_lfp[1] - t_lfp[0])
-    dt_in_sec = dt * 0.001
-    fs = 1 / dt_in_sec
-
-    fig, axes = plt.subplots(len(nperseg_vmin_dict), 1, figsize=(10, 3 * len(nperseg_vmin_dict)))
-    
-    if len(nperseg_vmin_dict) == 1:
-        axes = [axes]
-    
-    for i, (nperseg, vmin) in enumerate(nperseg_vmin_dict.items()):
-        ax = axes[i]
-        sos, filtered_lfp, f, t, Sxx = filter_and_transform_lfp(lfp, fs, nperseg=nperseg, nfft=nfft, lowcut=lowcut, highcut=highcut, order=order, if_padded=False)
-        vmin = vmin if vmin else None
-        print(vmin)
-
-        #np.log(Sxx)
-        cax = plot_spectrogram(ax, f, t, Sxx, nperseg=nperseg, nfft=nfft, order=order, vmin=vmin, vmax=-3, cmap_name=cmap_name)
-        #fig.colorbar(cax, ax=ax, label='LFP Wavelet Power ($V^2/Hz$)', pad=0.02)
-    
-    
-    plt.tight_layout()
-    plt.subplots_adjust(hspace=0.5)  # Adjust vertical space between plots
-    plt.show()
 
 
 def plot_lfp_fft(faxis, Sxx):
