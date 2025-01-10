@@ -12,169 +12,48 @@ import yaml
 from pylab import * 
 from scipy import signal
 from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
-#from scipy.signal import ShortTimeFFT
-
+import matplotlib.cm as cm
 import matplotlib.ticker as tkr
-from plot_help import mix_colors
+from load import get_dirs, load_result
+import pywt
+from wavelet import *
 
-
-
-
-def plot_spectrogram(ax, f, t, Sxx, nperseg, order, vmin, cmap_name='jet'):
+def plot_spectrogram(ax, f, t, power, vmin=None, vmax=None, cmap_name='jet'):
     """
-    Plots the spectrogram of the LFP signal.
-    
+    Plots the spectrogram of the LFP signal using the power of the STFT or wavelet transform.
+
     Parameters:
+    ax (matplotlib axis): Axis on which to plot.
     f (array): Array of sample frequencies.
     t (array): Array of segment times.
-    Sxx (2D array): Spectrogram of LFP signal.
-    vmax (float): Maximum value for color scaling.
-    nperseg (int): Length of each segment.
-    order (int): Order of the signal processing.
-    cmap_name (str): Name of the colormap to use for plotting.
+    power (2D array): Power of the STFT (magnitude squared).
+    vmin (float, optional): Minimum value for color scaling. Defaults to None (auto-scaled).
+    vmax (float, optional): Maximum value for color scaling. Defaults to None (auto-scaled).
+    cmap_name (str, optional): Name of the colormap to use for plotting. Defaults to 'jet'.
     """
-    
-    # Set colormap based on input
+    # Set colormap
     colors = cm.get_cmap(cmap_name, 200)
 
-    # Compute power (magnitude squared)
-    power = np.abs(Sxx)**2
-
-    # Apply log transform
-    # Adding a small constant to avoid taking log of zero
-    power_log = 10 * np.log10(power + 1e-10)  # Log base 10
-
-    # Compute vmax from Sxx_magnitude or Sxx_log
+    # Compute vmax from power
     vmax = np.max(power)
-    
-    #print('Max log power value for nperseg =', nperseg, 'is', np.max(power_log))
-    #print('Min log power value for nperseg =', nperseg, 'is', np.min(power_log))
-    
+    print("np.max(power) =", vmax)
+    print("np.min(power) =", np.min(power))
+
+    # Plot the spectrogram
     cax = ax.pcolormesh(t, f, power, shading='gouraud', vmin=vmin, vmax=vmax, cmap=colors)
-    
+    #cax = ax.contourf(t, f, power, 256, cmap=cmap_name)
+        
     # Add colorbar
     cbar = plt.colorbar(cax, ax=ax)
-    cbar.set_label('LFP Power ($V^2/Hz$)')
+    cbar.set_label('LFP Power ($V^2/Hz$)', fontsize=12)
 
-    # Set title including color scheme
-    ax.set_title(f'Spectrogram of LFP Signal (STFT), seg length = {nperseg} pts, order = {order}, colormap = {cmap_name}', fontsize=12, pad=20)
-    # Position legend inside the plot
-    handles, labels = ax.get_legend_handles_labels()
-    ax.legend(handles, labels, loc='upper left', bbox_to_anchor=(1, 1))  # Adjust legend position
+    # Set axis labels and title
+    ax.set_title('Spectrogram of LFP Signal', fontsize=14, pad=20)
+    ax.set_ylabel('Frequency [Hz]', fontsize=12)
+    ax.set_xlabel('Time [ms]', fontsize=12)
+    ax.set_ylim([0, 200])  # Adjust as needed based on frequency range
 
-    
-    ax.set_ylabel('Frequency [Hz]', fontsize=14)
-    ax.set_xlabel('Time [sec]', fontsize=14)
-    ax.set_ylim([0, 200])
-    
     return cax
-
-
-def plot_spectrogram2(t_original, lfp_original, t_downsampled, lfp_downsampled, dt, downsampled_dt):
-    """
-    Plots the spectrograms of the original and downsampled LFP signals.
-    
-    Parameters:
-    t_original (array-like): Time points for the original LFP signal.
-    lfp_original (array-like): Original LFP signal values.
-    t_downsampled (array-like): Time points for the downsampled LFP signal.
-    lfp_downsampled (array-like): Downsampled LFP signal values.
-    dt (float): Time step (ms) for the original signal.
-    downsampled_dt (float): Time step (ms) for the downsampled signal.
-    """
-    # Compute sampling frequencies
-    fs_original = 1 / (dt / 1000)  # Convert ms to seconds
-    fs_downsampled = 1 / (downsampled_dt / 1000)
-
-    # Generate spectrograms
-    f_original, t_spec_original, Sxx_original = spectrogram(lfp_original, fs=fs_original, nperseg=256, noverlap=128)
-    f_downsampled, t_spec_downsampled, Sxx_downsampled = spectrogram(lfp_downsampled, fs=fs_downsampled, nperseg=256, noverlap=128)
-
-    # Plot spectrograms
-    fig, axes = plt.subplots(2, 1, figsize=(10, 8))
-
-    # Original signal spectrogram
-    axes[0].pcolormesh(t_spec_original, f_original, 10 * np.log10(Sxx_original), shading='jet')
-    axes[0].set_title('Spectrogram of Original LFP Signal')
-    axes[0].set_ylabel('Frequency (Hz)')
-    axes[0].set_ylim(0, 200)  # Limit to 200 Hz
-
-    # Downsampled signal spectrogram
-    axes[1].pcolormesh(t_spec_downsampled, f_downsampled, 10 * np.log10(Sxx_downsampled), shading='jet')
-    axes[1].set_title('Spectrogram of Downsampled LFP Signal')
-    axes[1].set_xlabel('Time (s)')
-    axes[1].set_ylabel('Frequency (Hz)')
-    axes[1].set_ylim(0, 200)  # Limit to 200 Hz
-
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_lfp_wavelet_power(paramset):
-
-    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
-        params_dict = yaml.load(f, Loader=yaml.FullLoader)
-
-    if 'dt' in params_dict:
-        dt = params_dict['dt']
-    else:
-        dt = 0.1
-
-    if 'sniff_count' in params_dict:
-        sniff_count = params_dict['sniff_count']
-    else:
-        sniff_count = 8
-
-    events_, vs_, spike_events_, t_lfp_, lfp_, lfp_bp_gamma_, lfp_bp_hfo_, lfp_wavelet_power_, scales_, wavelet_, dt_, \
-        frequencies_, t_average_, lfp_wavelet_power_average_, params_dict_ = load_result("GammaSignature_SetupTime")
-
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset) 
-
-    plt.figure(figsize=(10,8))
-    plt.plot(frequencies, lfp_wavelet_power_average, color='r', alpha=0.2)
-    plt.plot(frequencies_, lfp_wavelet_power_average_, color='b', alpha=0.2)
-    plt.xlabel('Frequency [Hz]', fontsize=20)
-    plt.ylabel('Average LFP Power', fontsize=20)
-    plt.xticks(fontsize=20)
-    plt.yticks(fontsize=20)
-    #plt.title('Frequencies vs Average LFP Wavelet Power')
-
-    plt.savefig(f"{fig_dir}/lfp_power.pdf")
-    plt.show()
-
-
-
-
-def plot_lfp_fft_stacked(paramset, order, nfft, nperseg_vmin_dict, lowcut=30, highcut=80, cmap_name='jet'):
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-    frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
-    
-    assert dt == (t_lfp[1] - t_lfp[0])
-    dt_in_sec = dt * 0.001
-    fs = 1 / dt_in_sec
-
-    fig, axes = plt.subplots(len(nperseg_vmin_dict), 1, figsize=(10, 3 * len(nperseg_vmin_dict)))
-    
-    if len(nperseg_vmin_dict) == 1:
-        axes = [axes]
-    
-    for i, (nperseg, vmin) in enumerate(nperseg_vmin_dict.items()):
-        ax = axes[i]
-        sos, filtered_lfp, f, t, Sxx = filter_and_transform_lfp(lfp, fs, nperseg=nperseg, nfft=nfft, lowcut=lowcut, highcut=highcut, order=order, if_padded=False)
-        vmin = vmin if vmin else None
-        print(vmin)
-
-        #np.log(Sxx)
-        cax = plot_spectrogram(ax, f, t, Sxx, nperseg=nperseg, nfft=nfft, order=order, vmin=vmin, vmax=-3, cmap_name=cmap_name)
-        #fig.colorbar(cax, ax=ax, label='LFP Wavelet Power ($V^2/Hz$)', pad=0.02)
-    
-    
-    plt.tight_layout()
-    plt.subplots_adjust(hspace=0.5)  # Adjust vertical space between plots
-    plt.show()
-
 
 
 def plot_wavelet_stacked(t, lfp, dt, config):
@@ -215,7 +94,6 @@ def plot_wavelet_stacked(t, lfp, dt, config):
 
 
 
-
 def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, params_short=True, params_filename='default', params_title='', show=True, yaxis=True, xlabel=True):
 
     params_list, params_filename = get_params(paramset)
@@ -249,7 +127,6 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, params
 
     if show:
         plt.show()
-
 
 
 def plot_sniff_average_stft(lfp, params_dict, fs, nperseg, lowcut, highcut, order):
@@ -329,6 +206,38 @@ def plot_sniff_average_stft(lfp, params_dict, fs, nperseg, lowcut, highcut, orde
     plt.show()
     
     return f, t, avg_Sxx
+
+
+
+
+
+def plot_lfp_fft_stacked(paramset, order, nfft, nperseg_vmin_dict, lowcut=30, highcut=80, cmap_name='jet'):
+    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+    frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+    
+    assert dt == (t_lfp[1] - t_lfp[0])
+    dt_in_sec = dt * 0.001
+    fs = 1 / dt_in_sec
+
+    fig, axes = plt.subplots(len(nperseg_vmin_dict), 1, figsize=(10, 3 * len(nperseg_vmin_dict)))
+    
+    if len(nperseg_vmin_dict) == 1:
+        axes = [axes]
+    
+    for i, (nperseg, vmin) in enumerate(nperseg_vmin_dict.items()):
+        ax = axes[i]
+        sos, filtered_lfp, f, t, Sxx = filter_and_transform_lfp(lfp, fs, nperseg=nperseg, nfft=nfft, lowcut=lowcut, highcut=highcut, order=order, if_padded=False)
+        vmin = vmin if vmin else None
+        print(vmin)
+
+        #np.log(Sxx)
+        cax = plot_spectrogram(ax, f, t, Sxx, nperseg=nperseg, nfft=nfft, order=order, vmin=vmin, vmax=-3, cmap_name=cmap_name)
+        #fig.colorbar(cax, ax=ax, label='LFP Wavelet Power ($V^2/Hz$)', pad=0.02)
+    
+    
+    plt.tight_layout()
+    plt.subplots_adjust(hspace=0.5)  # Adjust vertical space between plots
+    plt.show()
 
 
 def plot_scalogram(times, frequencies, power, fig_dir, params_filename='default', params_title=''):
