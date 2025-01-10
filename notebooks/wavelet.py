@@ -1,11 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pywt   # pip install pywavelets
-from filter import butter_bandpass_filter
+from filtering import butter_bandpass_filter
 
 ######################## Analyzing and plotting frequency info #########################
 
-def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low=3, scale_high=200):
+def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low=3, scale_high=200, normalize=False):
     """
     Computes the wavelet transform of the bandpass-filtered LFP signal.
 
@@ -18,13 +18,30 @@ def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low
         scale_high (float): Upper bound of the scale range.
 
     Returns:
-        tuple: Frequencies and wavelet power.
+        tuple: Time vector, frequencies, and wavelet power.
     """
+    # Bandpass filter the LFP signal
     lfp_bp = butter_bandpass_filter(lfp, 1, 200, 1 / dt * 1000, order=4)
+    
+    # Generate scales and compute the wavelet transform
     scales = np.linspace(scale_low / dt, scale_high / dt, num_scales)
+    # Generate scales (logarithmic distribution for better frequency resolution)
+    #scales = np.logspace(np.log10(scale_low / dt), np.log10(scale_high / dt), num_scales)
+    
     cfs, frequencies = pywt.cwt(lfp_bp, scales, wavelet, dt / 1000.0)
+    
+    # Compute wavelet power
     wavelet_power = np.log(1 + abs(cfs))
-    return frequencies, wavelet_power
+
+    # Normalize wavelet power if requested
+    if normalize:
+        wavelet_power /= np.max(wavelet_power)
+    
+    # Create time vector for plotting
+    t_wavelet = np.arange(len(lfp)) * (dt / 1000.0)  # Convert to seconds   
+    
+    # Return time, frequencies, and power
+    return t_wavelet, frequencies, wavelet_power
 
 
 def average_wavelet_power(lfp_wavelet_power, dt, sniff_count, sniff_rate):
