@@ -6,7 +6,13 @@ except:
     import pickle as cPickle
 
 import os
+import pywt
 import yaml
+
+
+from filtering import *
+
+
 
 ######################## Loading functions ###############################
 
@@ -14,7 +20,7 @@ def get_dirs(paramset='ParameterSetBase'):
     cwd = os.getcwd()
     ob_dir = os.path.dirname(cwd)
 
-    results_dir = os.path.join(ob_dir, 'results')
+    results_dir = os.path.join(ob_dir, 'results_newcombo6')
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
 
@@ -61,7 +67,7 @@ def get_params(paramset):
     background_current = params_dict['background_current']
     max_firing_rate = params_dict['max_firing_rate']
     sniff_rate = params_dict['sniff_rate']
-    electrode_location = params_dict['electrode_location']
+    #electrode_location = params_dict['electrode_location']
     #probe_x = params_dict['probe_x']
     #probe_y = params_dict['probe_y']
     #probe_z = params_dict['probe_z']
@@ -87,7 +93,8 @@ def get_params(paramset):
     params_list = f'setup_time={setup_time}, gaba_gmax={gaba_gmax}, gaba_tau1={gaba_tau1}, gaba_tau2={gaba_tau2}, mc_input_weight={mc_input_weight}, '\
                   f'tc_input_weight={tc_input_weight},\n mc_gap_junction_gmax={mc_gap_junction_gmax}, tc_gap_junction_gmax={tc_gap_junction_gmax}, '\
                   f'nmda_toggle={nmda_toggle}, ampa_nmda_gmax={ampa_nmda_gmax}, max_firing_rate={max_firing_rate}, sniff_rate={sniff_rate}, '\
-                  f'dt={dt}, sniff_count={sniff_count}, background_current={background_current}, electrode_location={electrode_location}, '
+                  f'dt={dt}, sniff_count={sniff_count}, background_current={background_current}'
+                  #, electrode_location={electrode_location}, '
                   #f'probe_x={probe_x}, probe_y={probe_y}, probe_z={probe_z}, probe_n_electrodes={probe_n_electrodes}, probe_spacing={probe_spacing}'
 
     params_filename = ''
