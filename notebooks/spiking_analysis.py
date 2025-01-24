@@ -2,7 +2,7 @@ from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 
-from lfp_analysis_current import load_result
+from load import load_result
 
 
 
