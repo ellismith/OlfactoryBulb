@@ -21,9 +21,11 @@ def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low
         tuple: Time vector, frequencies, and wavelet power.
     """
     # Bandpass filter the LFP signal
-    lfp_bp = butter_bandpass_filter(lfp, 1, 200, 1 / dt * 1000, order=4)
+    lfp_bp = butter_bandpass_filter(lfp, 1, 200, 1 / dt * 1000, order=3)
     
     # Generate scales and compute the wavelet transform
+    print("scale_low:", scale_low)
+    print("scale_high:", scale_high)
     scales = np.linspace(scale_low / dt, scale_high / dt, num_scales)
     # Generate scales (logarithmic distribution for better frequency resolution)
     #scales = np.logspace(np.log10(scale_low / dt), np.log10(scale_high / dt), num_scales)
@@ -38,10 +40,10 @@ def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low
         wavelet_power /= np.max(wavelet_power)
     
     # Create time vector for plotting
-    t_wavelet = np.arange(len(lfp)) * (dt / 1000.0)  # Convert to seconds   
+    #t_wavelet = np.arange(len(lfp)) * (dt / 1000.0)  # Convert to seconds   
     
     # Return time, frequencies, and power
-    return t_wavelet, frequencies, wavelet_power
+    return frequencies, wavelet_power
 
 
 def average_wavelet_power(lfp_wavelet_power, dt, sniff_count, sniff_rate):
