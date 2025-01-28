@@ -243,6 +243,41 @@ def plot_power_hfo(paramsets):
 
 
 
+def plot_lfp_wavelet_power(paramset):
+
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
+        params_dict = yaml.load(f, Loader=yaml.FullLoader)
+
+    if 'dt' in params_dict:
+        dt = params_dict['dt']
+    else:
+        dt = 0.1
+
+    if 'sniff_count' in params_dict:
+        sniff_count = params_dict['sniff_count']
+    else:
+        sniff_count = 8
+
+    events_, vs_, spike_events_, t_lfp_, lfp_, lfp_bp_gamma_, lfp_bp_hfo_, lfp_wavelet_power_, scales_, wavelet_, dt_, \
+        frequencies_, t_average_, lfp_wavelet_power_average_, params_dict_ = load_result("GammaSignature_SetupTime")
+
+    events, vs, spike_events, t_lfp, lfp, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset) 
+
+    plt.figure(figsize=(10,8))
+    plt.plot(frequencies, lfp_wavelet_power_average, color='r', alpha=0.2)
+    plt.plot(frequencies_, lfp_wavelet_power_average_, color='b', alpha=0.2)
+    plt.xlabel('Frequency [Hz]', fontsize=20)
+    plt.ylabel('Average LFP Power', fontsize=20)
+    plt.xticks(fontsize=20)
+    plt.yticks(fontsize=20)
+    #plt.title('Frequencies vs Average LFP Wavelet Power')
+
+    plt.savefig(f"{fig_dir}/lfp_power.pdf")
+    plt.show()
+
+
 
 
 
