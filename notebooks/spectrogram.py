@@ -14,11 +14,12 @@ from scipy import signal
 from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
 import matplotlib.cm as cm
 import matplotlib.ticker as tkr
-from load import get_dirs, load_result
+from load import *
 import pywt
 from wavelet import *
+from filtering import *
 
-def plot_spectrogram(ax, f, t, power, vmin=None, vmax=None, cmap_name='jet'):
+def plot_spectrogram(ax, f, t, power, wavelet=None, vmin=None, vmax=None, cmap_name='jet'):
     """
     Plots the spectrogram of the LFP signal using the power of the STFT or wavelet transform.
 
@@ -35,28 +36,33 @@ def plot_spectrogram(ax, f, t, power, vmin=None, vmax=None, cmap_name='jet'):
     colors = cm.get_cmap(cmap_name, 200)
 
     # Compute vmax from power
-    vmax = np.max(power)
-    print("np.max(power) =", vmax)
-    print("np.min(power) =", np.min(power))
+    #vmax = np.max(power)
+    #print("np.max(power) =", vmax)
+    #print("np.min(power) =", np.min(power))
 
+    print(f"t shape: {len(t)}")
+    print(f"f shape: {len(f)}")
+    print(f"power shape: {power.shape}")
     # Plot the spectrogram
-    cax = ax.pcolormesh(t, f, power, shading='gouraud', vmin=vmin, vmax=vmax, cmap=colors)
-    #cax = ax.contourf(t, f, power, 256, cmap=cmap_name)
+    #cax = ax.pcolormesh(t, f, power, shading='gouraud', vmin=vmin, vmax=.3, cmap=colors)
+    cax = ax.contourf(t, f, power, 256, vmin=vmin, vmax=vmax, cmap=cmap_name)
         
-    # Add colorbar
+    # Add colorbadr
     cbar = plt.colorbar(cax, ax=ax)
     cbar.set_label('LFP Power ($V^2/Hz$)', fontsize=12)
 
     # Set axis labels and title
-    ax.set_title('Spectrogram of LFP Signal', fontsize=14, pad=20)
+    ax.set_title(f'Spectrogram of LFP Signal, wavelet: {wavelet}', fontsize=14, pad=20)
     ax.set_ylabel('Frequency [Hz]', fontsize=12)
+    
     ax.set_xlabel('Time [ms]', fontsize=12)
-    ax.set_ylim([0, 200])  # Adjust as needed based on frequency range
+    ax.set_xlim([0,max(t)])
+    ax.set_ylim([0,200])  # Adjust as needed based on frequency range
 
     return cax
 
 
-def plot_wavelet_stacked(t, lfp, dt, config):
+def plot_wavelet_stacked(t, lfp, dt, config, scale_low=3, scale_high=200):
     """
     Plots stacked wavelet spectrograms based on the given configuration.
 
@@ -73,8 +79,6 @@ def plot_wavelet_stacked(t, lfp, dt, config):
     # Loop through each configuration to generate a spectrogram
     for i, (freq_range, wavelet, num_scale) in enumerate(zip(config["ranges"], config["wavelets"], config["num_scales"])):
         ax = plt.subplot(num_configs, 1, i + 1)
-        scale_low=3 
-        scale_high=200
         # Compute the wavelet transform
         frequencies, wavelet_power = compute_wavelet_transform(lfp, dt, num_scales=num_scale, wavelet=wavelet, 
                                                                scale_low=scale_low, scale_high=scale_high)
@@ -85,7 +89,7 @@ def plot_wavelet_stacked(t, lfp, dt, config):
         ax.set_xlim(min(t), max(t))
         #print(max(t))
         ax.set_ylabel('Frequency [Hz]', fontsize=14)
-        ax.set_xlabel('Simulation Time [s]', fontsize=14)
+        ax.set_xlabel('Simulation Time [ms]', fontsize=14)
         ax.set_xlim(0,max(t)-0.3)
         ax.set_title(f"Wavelet: {wavelet}, Scales: {num_scale}, Freq range: {freq_range}", fontsize=18)
 
@@ -95,19 +99,40 @@ def plot_wavelet_stacked(t, lfp, dt, config):
 
 
 def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, params_short=True, params_filename='default', params_title='', show=True, yaxis=True, xlabel=True):
-
+    """
+    Plot the average sniff wavelet power as a contour plot with a colorbar.
+    
+    Args:
+        t_average (array): Time axis data for the plot.
+        frequencies (array): Frequency axis data for the plot.
+        lfp_wavelet_power_average (2D array): Wavelet power values to be plotted.
+        paramset (dict): Parameter set for the simulation.
+        fig_dir (str): Directory to save the figure.
+        params_short (bool): If True, use shortened parameter names.
+        params_filename (str): Name for the saved file.
+        params_title (str): Title for the plot.
+        show (bool): Whether to display the plot.
+        yaxis (bool): Whether to show the y-axis label.
+        xlabel (bool): Whether to show the x-axis label.
+    """
     params_list, params_filename = get_params(paramset)
-    #print("params_filename: ", params_filename)
 
-    # electrode_location = params_dict['electrode_location']
     if show:
         plt.subplots(figsize=(4, 5))
 
     colors = cm.get_cmap('jet', 200)
-    plt.contourf(t_average, frequencies, lfp_wavelet_power_average, 256, \
-                 vmin = 0, vmax = 0.1, cmap=colors)
-    plt.xlim((0,200))
-    plt.ylim((20,180))
+    contour = plt.contourf(
+        t_average, 
+        frequencies, 
+        lfp_wavelet_power_average, 
+        256, 
+        vmin=0, 
+        vmax=None, 
+        cmap=colors
+    )
+    
+    plt.xlim((0, 200))
+    plt.ylim((0, 200))
 
     if yaxis:
         plt.ylabel('Frequency [Hz]', fontsize=14)
@@ -118,12 +143,19 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, params
     if xlabel:
         plt.xlabel('Time Since Sniff Onset [ms]', fontsize=14)
 
+    plt.xticks(
+        np.arange(round(min(t_average)), max(t_average) + 1, 50.0)[:-1], 
+        fontsize=14
+    )
 
-    plt.xticks(np.arange(round(min(t_average)), max(t_average)+1, 50.0)[:-1], fontsize = 14)
-    #plt.title(f'{params_title}', fontsize=16, y=1.1, wrap=True)
+    # Add a colorbar
+    cbar = plt.colorbar(contour, pad=0.02)
+    cbar.set_label('Wavelet Power', fontsize=14)
+    cbar.ax.tick_params(labelsize=12)
 
-    # plt.savefig(f"{fig_dir}/fingerprint-{params_filename}.pdf", bbox_inches='tight')
-    plt.savefig(f"{fig_dir}/sniff_average-{params_filename}.jpg", bbox_inches='tight', dpi=300)
+    # Round colorbar ticks to 2 decimal places
+    cbar.formatter = tkr.FormatStrFormatter('%.2f')
+    cbar.update_ticks()
 
     if show:
         plt.show()
