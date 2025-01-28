@@ -3,8 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
-from lfp_analysis_current import load_result
-
+from load import *
+from spectrogram import *
+from wavelet import *
 
 def mix_colors(color1, color2):
     """
@@ -135,13 +136,13 @@ def show_subplot(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
     ax[1].plot(t, lfp*10000 + 200, label='raw', color='black')
 
     # Plot beta BP filtered LFP
-    ax[1].plot(t, lfp_bp_beta*10000-1200, label='BP filtered: beta', color='purple')
+    ax[1].plot(t, lfp_bp_beta*10000-2000, label='BP filtered: beta', color='purple')
 
     # Plot gamma BP filtered LFP
-    ax[1].plot(t, lfp_bp_gamma*10000-2200, label='BP filtered: gamma', color='orange')
+    ax[1].plot(t, lfp_bp_gamma*10000-3000, label='BP filtered: gamma', color='orange')
 
     # Plot HFO BP filtered LFP
-    #ax[1].plot(t,lfp_bp_hfo*10000-800,label='BP filtered: HFO', color='green')
+    ax[1].plot(t,lfp_bp_hfo*10000-4000,label='BP filtered: HFO', color='green')
 
     ax[1].set_xticks(np.arange(min(t), max(t)+1, 50.0))
     ax[1].tick_params(labelsize=12)
@@ -222,11 +223,11 @@ def show_subplot2(paramset, params_short=True):
     for cell, t, v in vs:
         if 'TC' in cell:
             col = 'magenta'
-            print(cell)
+            #print(cell)
             
         elif 'MC' in cell:
             col = 'blue'
-            print(cell)
+            #print(cell)
            
         elif 'GC' in cell:
             #col = 'orange'
@@ -293,6 +294,7 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1
     """
     
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+    print("results_dir:", results_dir)
 
     fig_width = 27
     events, vs, spike_times, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
@@ -313,7 +315,7 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1
 
     # Main figure with subplots for spikes and LFP
     fig, ax = plt.subplots(2, 1, gridspec_kw={'height_ratios': [3, 1]},
-                           figsize=(fig_width, 16), constrained_layout=True)
+                           figsize=(fig_width, 24), constrained_layout=True)
 
     i = 0
     for cell, t, v in vs:
@@ -356,9 +358,9 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1
 
     ax[1].margins(0)
     ax[1].plot(t, lfp * 10000 + 200, label='raw', color='black')
-    ax[1].plot(t, lfp_bp_beta * 10000 - 1000, label='BP filtered: beta', color='purple')
-    ax[1].plot(t, lfp_bp_gamma * 10000 - 1600, label='BP filtered: gamma', color='orange')
-    ax[1].plot(t, lfp_bp_hfo * 10000 - 2200, label='BP filtered: HFO', color='green')
+    ax[1].plot(t, lfp_bp_beta * 10000 - 7000, label='BP filtered: beta', color='purple')
+    ax[1].plot(t, lfp_bp_gamma * 10000 - 10000, label='BP filtered: gamma', color='orange')
+    ax[1].plot(t, lfp_bp_hfo * 10000 - 13000, label='BP filtered: HFO', color='green')
 
     ax[1].set_xticks(np.arange(min_t, max_t + 1, 50.0))
     ax[1].tick_params(labelsize=12)
@@ -370,18 +372,17 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1
     ax[1].legend(loc=(0.9, 0.27))
     ax[1].set_xlim(min_t, max_t)
 
-    # Create a new figure for the STFT plot separately
-    #fig_stft, ax_stft = plt.subplots(figsize=(6, 6), constrained_layout=True)
+    # Create a new figure for the spectrogram plot separately
+    fig_spectr, ax_spectr = plt.subplots(figsize=(6, 6), constrained_layout=True)
     
     fs = 1 / (params_dict['dt'] * 1e-3)
-    f, t, avg_Sxx = plot_sniff_average_stft(lfp, params_dict, fs=fs, nperseg=nperseg, lowcut=lowcut, highcut=highcut, order=order)
-    #plot_spectrogram(ax_stft, f, t, avg_Sxx, nperseg, order, vmin=None, cmap_name='jet')
-    
-    # Adjust title placement for STFT plot
-    #ax_stft.set_title('Average STFT Across Sniffs', fontsize=16)
+    t_wavelet, frequencies, wavelet_power = compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low=3, scale_high=200, normalize=False)
+    plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir)
+    plot_spectrogram(ax_spectr, f, t, wavelet_power, order, vmin=None, cmap_name='jet')
+    ax_spectr.set_title('Average LFP power (wavlelet transform) Across Sniffs', fontsize=16)
     
     # Save both figures
-    plt.savefig(f'{fig_dir}/spikes_spectrogram_{params_filename}.jpg', dpi=300)
+    #plt.savefig(f'{fig_dir}/spikes_spectrogram_{params_filename}.jpg', dpi=300)
     #fig_stft.savefig(f'{fig_dir}/sniff_average_stft_{params_filename}.jpg', dpi=300)
     
     plt.show()
