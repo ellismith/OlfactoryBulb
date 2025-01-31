@@ -104,6 +104,7 @@ def bandpass_filter(data, lowcut, highcut, dt, order=5, filter_type='filtfilt'):
 
 def filter_lfp(lfp, dt):
     """Apply bandpass filters to the LFP signal."""
+    lfp_bp_low = butter_bandpass_filter(lfp, 1, 10, 1 / dt * 1000, order=3)
     lfp_bp_beta = butter_bandpass_filter(lfp, 15, 40, 1 / dt * 1000, order=3)
     lfp_bp_gamma = butter_bandpass_filter(lfp, 3, 120, 1 / dt * 1000, order=3)
     lfp_bp_hfo = butter_bandpass_filter(lfp, 130, 200, 1 / dt * 1000, order=4)
@@ -167,7 +168,9 @@ def filter_spike_train(spike_train, lowcut, highcut, fs, t_start=0, t_end=1800, 
 
 
 # Define function to plot bandpassed signals
-def plot_bandpassed_signals(lfp_signal, t, dt, filter_type='filtfilt', order=5):
+def plot_bandpassed_signals(lfp_signal, t, dt, \
+                            low_lim = 1, mid_lim1 = 10, mid_lim2 = 100, high_lim=200, \
+                            filter_type='filtfilt', order=4):
     """
     Plots the original LFP signal and its bandpass-filtered versions in different frequency bands.
     
@@ -179,9 +182,14 @@ def plot_bandpassed_signals(lfp_signal, t, dt, filter_type='filtfilt', order=5):
     - order: int, order of the bandpass filter
     """
     # Bandpass filter for different frequency ranges
-    low_freq_signal = bandpass_filter(lfp_signal, 3, 40, dt, order=order, filter_type=filter_type)
-    medium_freq_signal = bandpass_filter(lfp_signal, 40, 100, dt, order=order, filter_type=filter_type)
-    high_freq_signal = bandpass_filter(lfp_signal, 100, 200, dt, order=order, filter_type=filter_type)
+    #low_lim = 1  # Hz
+    #mid_lim1 = 10
+    #mid_lim2 = 100
+    #high_lim = 200
+    
+    low_freq_signal = bandpass_filter(lfp_signal, low_lim, mid_lim1, dt, order=order, filter_type=filter_type)
+    medium_freq_signal = bandpass_filter(lfp_signal, mid_lim1, mid_lim2, dt, order=order, filter_type=filter_type)
+    high_freq_signal = bandpass_filter(lfp_signal, mid_lim2, high_lim, dt, order=order, filter_type=filter_type)
 
     # Create subplots
     fig, ax = plt.subplots(4, 1, figsize=(12, 8), sharex=True)
@@ -194,22 +202,22 @@ def plot_bandpassed_signals(lfp_signal, t, dt, filter_type='filtfilt', order=5):
     ax[0].legend(loc='upper right')
 
     # Plot the low-frequency bandpassed signal
-    ax[1].plot(t, low_freq_signal, color='blue', label='3-40 Hz Bandpass')
-    ax[1].set_title(f'Low Frequency (3 - 40 Hz) Bandpass | Filter: {filter_type}, Order: {order}')
+    ax[1].plot(t, low_freq_signal, color='blue', label=f'{low_lim} - {mid_lim1} Hz Bandpass')
+    ax[1].set_title(f'Low Frequency ({low_lim} - {mid_lim1} Hz) Bandpass | Filter: {filter_type}, Order: {order}')
     ax[1].set_ylabel('Amplitude')
     #ax[1].set_ylim(-1.1, 1.1)
     ax[1].legend(loc='upper right')
 
     # Plot the medium-frequency bandpassed signal
-    ax[2].plot(t, medium_freq_signal, color='green', label='100-200 Hz Bandpass')
-    ax[2].set_title(f'Medium Frequency (100 - 200 Hz) Bandpass | Filter: {filter_type}, Order: {order}')
+    ax[2].plot(t, medium_freq_signal, color='green', label=f'{mid_lim1} - {mid_lim2} Hz Bandpass')
+    ax[2].set_title(f'Medium Frequency ({mid_lim1} - {mid_lim2} Hz) Bandpass | Filter: {filter_type}, Order: {order}')
     ax[2].set_ylabel('Amplitude')
     #ax[2].set_ylim(-1.1, 1.1)
     ax[2].legend(loc='upper right')
 
     # Plot the high-frequency bandpassed signal
-    ax[3].plot(t, high_freq_signal, color='red', label='100-200 Hz Bandpass')
-    ax[3].set_title(f'High Frequency (100-200 Hz) Bandpass | Filter: {filter_type}, Order: {order}')
+    ax[3].plot(t, high_freq_signal, color='red', label=f'{mid_lim2} - {high_lim} Hz Bandpass')
+    ax[3].set_title(f'High Frequency ({mid_lim2} - {high_lim} Hz) Bandpass | Filter: {filter_type}, Order: {order}')
     ax[3].set_xlabel('Time (s)')
     ax[3].set_ylabel('Amplitude')
     #ax[3].set_ylim(-1.1, 1.1)
