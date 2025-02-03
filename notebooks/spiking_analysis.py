@@ -107,30 +107,82 @@ def plot_proportion_spiking(proportions):
 
     plt.show()
 
-def get_population_firing_rates(spike_times, dt):
 
-    # Initialize dictionaries to store spike counts and total time for each cell type
+
+def get_firing_rates(spike_times, dt):
+    """
+    Computes the firing rates for individual cells and for each cell type.
+
+    Parameters:
+    spike_times (list of tuples): Each tuple contains a cell identifier and a list of spike times.
+    dt (float): Time step in milliseconds.
+
+    Returns:
+    dict: Firing rates for each individual cell (Hz).
+    dict: Firing rates (Hz) for each cell type.
+    """
+    assert dt > 0, "dt must be a positive value."
+
     spike_counts = defaultdict(int)
     cell_type_counts = defaultdict(int)
-    
-    # Iterate through the spike_times to count spikes for each cell and cell type
+    cell_firing_rates = {}
+
+    # Find the total duration of the simulation
+    all_spike_times = [time for _, times in spike_times for time in times]
+    if all_spike_times:
+        total_time_ms = max(all_spike_times)  # Use max spike time as simulation duration
+    else:
+        total_time_ms = 1  # Prevent division by zero if no spikes exist
+
+    total_time_s = total_time_ms / 1000  # Convert ms to seconds
+
     for seg, times in spike_times:
-        cell_type = seg[:3]
+        assert isinstance(times, list), f"Spike times for {seg} should be a list."
+        
+        cell_type = seg[:3]  # Extracts GC, MC, or TC
         cell_type_counts[cell_type] += 1
         spike_counts[cell_type] += len(times)
 
-    # Calculate firing rates for each cell type
-    firing_rates = {}
+        # Compute firing rate for individual cells
+        firing_rate = len(times) / total_time_s if total_time_s > 0 else 0
+        cell_firing_rates[seg] = firing_rate  # Store per-cell firing rate
+
+    # Compute overall firing rate per cell type
+    cell_type_firing_rates = {}
     for cell_type in cell_type_counts:
         total_cells = cell_type_counts[cell_type]
         total_spikes = spike_counts[cell_type]
-        # Convert dt from seconds to milliseconds if needed
-        time_window_seconds = dt * len(spike_times)  # Total time in seconds
-        firing_rate = (total_spikes / (total_cells * time_window_seconds))  # firing rate in Hz
-        firing_rates[cell_type] = firing_rate
+        firing_rate = total_spikes / (total_cells * total_time_s) if total_cells > 0 else 0
+        cell_type_firing_rates[cell_type] = firing_rate
 
-    return firing_rates
+    return cell_firing_rates, cell_type_firing_rates
 
+
+def plot_firing_rates(firing_rates):
+
+    """
+    Plots a bar chart for the given data with specific colors using matplotlib.
+    
+    Parameters:
+    data (dict): Dictionary where keys are cell names and values are numeric values.
+    """
+    
+    colors = []
+    for cell in firing_rates.keys():
+        if 'TC' in cell:
+            colors.append('magenta')
+        elif 'MC' in cell:
+            colors.append('blue')
+        elif 'GC' in cell:
+            colors.append('orange')
+    
+    plt.figure(figsize=(8, 5))
+    plt.bar(firing_rates.keys(), firing_rates.values(), color=colors)
+    plt.xlabel("Cell Type")
+    plt.ylabel("Spike Rate (Hz)")
+    plt.title("Spike Rates by Cell Type")
+    plt.xticks(rotation=45)
+    plt.show()
 
 
 def plot_spikes(vs, spike_times):
