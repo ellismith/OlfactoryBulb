@@ -23,6 +23,45 @@ def mix_colors(color1, color2):
     return mcolors.to_hex((c1 + c2) / 2)
 
 
+def get_toy_data(dt=0.1, duration=2000):
+    '''
+    dt: time step (ms)
+    duration: total time (ms)
+    '''
+    t = np.arange(0, duration, dt)  # Time vector in ms
+
+    # Create an LFP signal with low (5 Hz), medium (40 Hz), and high-frequency (150 Hz) components, plus noise
+    toy_lfp_signal = (
+        0.2 * np.sin(2 * np.pi * (5 / 1000) * t) +            # 5 Hz component (converted to kHz)
+        0.3 * np.sin(2 * np.pi * (40 / 1000) * t) +           # 40 Hz component (converted to kHz)
+        (0.5 * np.sin(2 * np.pi * (0.5 / 1000) * t)) *        # Envelope at 0.5 Hz (converted to kHz)
+        np.sin(2 * np.pi * (150 / 1000) * t) +                # 150 Hz component (converted to kHz)
+        0.1 * np.random.randn(len(t))                        # Random noise
+    )
+
+    return t, toy_lfp_signal
+
+
+def get_toy_data2(dt=0.1, duration=2000):
+    '''
+    dt: time step (ms)
+    duration: total time (ms)
+    '''
+
+    t = np.arange(0, duration, dt)  # Time vector in ms
+
+    # Create an LFP signal with low (5 Hz), medium (40 Hz), and high-frequency (150 Hz) components, plus noise
+    toy_lfp_signal = (
+        0.2 * np.sin(2 * np.pi * (28 / 1000) * t) +            # 5 Hz component (converted to kHz)
+        0.3 * np.sin(2 * np.pi * (70 / 1000) * t) +           # 40 Hz component (converted to kHz)
+        (0.5 * np.sin(2 * np.pi * (0.5 / 1000) * t)) *        # Envelope at 0.5 Hz (converted to kHz)
+        np.sin(2 * np.pi * (150 / 1000) * t) +                # 150 Hz component (converted to kHz)
+        0.1 * np.random.randn(len(t))                        # Random noise
+    )
+
+    return t, toy_lfp_signal
+
+
 def show_subplot(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
 
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
@@ -135,8 +174,8 @@ def show_subplot(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
     ax[1].margins(0)
     ax[1].plot(t, lfp*10000 + 200, label='raw', color='black')
 
-    # Plot beta BP filtered LFP
-    ax[1].plot(t, lfp_bp_beta*10000-2000, label='BP filtered: beta', color='purple')
+    # Plot low BP filtered LFP
+    ax[1].plot(t, lfp_bp_low*10000-2000, label='BP filtered: low', color='purple')
 
     # Plot gamma BP filtered LFP
     ax[1].plot(t, lfp_bp_gamma*10000-3000, label='BP filtered: gamma', color='orange')
@@ -297,7 +336,7 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1
     print("results_dir:", results_dir)
 
     fig_width = 27
-    events, vs, spike_times, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
+    events, vs, spike_times, t_lfp, lfp, lfp_bp_low, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
         frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
     print("lfp_pkl_file:", lfp_pkl_file)
 
@@ -358,7 +397,7 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1
 
     ax[1].margins(0)
     ax[1].plot(t, lfp * 10000 + 200, label='raw', color='black')
-    ax[1].plot(t, lfp_bp_beta * 10000 - 7000, label='BP filtered: beta', color='purple')
+    ax[1].plot(t, lfp_bp_low * 10000 - 7000, label='BP filtered: low', color='purple')
     ax[1].plot(t, lfp_bp_gamma * 10000 - 10000, label='BP filtered: gamma', color='orange')
     ax[1].plot(t, lfp_bp_hfo * 10000 - 13000, label='BP filtered: HFO', color='green')
 
@@ -419,5 +458,17 @@ def plot_average_vs_paramsets(sets, paramset, fig_dir, labels=None):
 
 
 
+def get_cells_with_odor_inputs(events):
+    keys = list(events.keys())
+    types = [key.split('.')[1].split('[')[0] for key in keys]
 
+    # Count occurrences of each type
+    type_counts = Counter(types)
+    
+    # Extract and count prefixes (MC or TC) directly
+    counts = Counter(key.split('.')[1][:2] for key in keys) 
+    print(f"Total MCs: {counts['MC']}")
+    print(f"Total TCs: {counts['TC']}")
+
+    return counts
 
