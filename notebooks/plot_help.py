@@ -23,7 +23,7 @@ def mix_colors(color1, color2):
     return mcolors.to_hex((c1 + c2) / 2)
 
 
-def get_toy_data(dt=0.1, duration=2000):
+def get_toy_data(f1=28, f2=70, f3=150, dt=0.1, duration=2000):
     '''
     dt: time step (ms)
     duration: total time (ms)
@@ -32,30 +32,10 @@ def get_toy_data(dt=0.1, duration=2000):
 
     # Create an LFP signal with low (5 Hz), medium (40 Hz), and high-frequency (150 Hz) components, plus noise
     toy_lfp_signal = (
-        0.2 * np.sin(2 * np.pi * (5 / 1000) * t) +            # 5 Hz component (converted to kHz)
-        0.3 * np.sin(2 * np.pi * (40 / 1000) * t) +           # 40 Hz component (converted to kHz)
+        0.2 * np.sin(2 * np.pi * (f1 / 1000) * t) +            # f1 Hz component (converted to kHz)
+        0.3 * np.sin(2 * np.pi * (f2 / 1000) * t) +           # f2 Hz component (converted to kHz)
         (0.5 * np.sin(2 * np.pi * (0.5 / 1000) * t)) *        # Envelope at 0.5 Hz (converted to kHz)
-        np.sin(2 * np.pi * (150 / 1000) * t) +                # 150 Hz component (converted to kHz)
-        0.1 * np.random.randn(len(t))                        # Random noise
-    )
-
-    return t, toy_lfp_signal
-
-
-def get_toy_data2(dt=0.1, duration=2000):
-    '''
-    dt: time step (ms)
-    duration: total time (ms)
-    '''
-
-    t = np.arange(0, duration, dt)  # Time vector in ms
-
-    # Create an LFP signal with low (5 Hz), medium (40 Hz), and high-frequency (150 Hz) components, plus noise
-    toy_lfp_signal = (
-        0.2 * np.sin(2 * np.pi * (28 / 1000) * t) +            # 5 Hz component (converted to kHz)
-        0.3 * np.sin(2 * np.pi * (70 / 1000) * t) +           # 40 Hz component (converted to kHz)
-        (0.5 * np.sin(2 * np.pi * (0.5 / 1000) * t)) *        # Envelope at 0.5 Hz (converted to kHz)
-        np.sin(2 * np.pi * (150 / 1000) * t) +                # 150 Hz component (converted to kHz)
+        np.sin(2 * np.pi * (f3 / 1000) * t) +                # f3 Hz component (converted to kHz)
         0.1 * np.random.randn(len(t))                        # Random noise
     )
 
