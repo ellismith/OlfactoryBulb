@@ -24,7 +24,7 @@ import pandas as pd
 from collections import defaultdict
 from scipy.stats import ttest_ind
 import pyspike as spk
-from notebooks.filtering import *
+from filtering import *
 
 def get_spike_trains(trains, t_start=0, t_end=1800):
     return [spk.SpikeTrain(spike_times=st, edges=[t_start, t_end], is_sorted=True) for st in trains]
