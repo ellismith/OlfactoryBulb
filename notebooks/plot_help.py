@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
+from collections import Counter
+import json
 from load import *
 from spectrogram import *
 from wavelet import *
@@ -451,4 +453,65 @@ def get_cells_with_odor_inputs(events):
     print(f"Total TCs: {counts['TC']}")
 
     return counts
+
+
+def plot_cells_with_odor_inputs(slices_dir, paramset='GammaSignature_SetupTime'):
+    #slices_dir = os.path.join('/home/ellismith/OlfactoryBulb-1/olfactorybulb/slices')
+
+    # files to make pretty
+    file_names = ['glom_cells']  # ['GCs', 'MCs', 'TCs', 'GCs__MCs', 'GCs__TCs']
+
+    for file_name in file_names:
+        # open original file
+        with open(f'{slices_dir}/{paramset}/{file_name}.json','r') as f:
+            glom_cells = json.load(f)
+
+    # Extract first three characters (e.g., "MC3") and count occurrences
+    counts = {key: Counter([val[:3] for val in values]) for key, values in glom_cells.items()}
+
+    # Unique cell types and sorting order
+    all_cell_types = sorted(set(cell for count in counts.values() for cell in count))
+
+    # Define colors for keys
+    key_colors = {"1474": "orange", "1614": "blue"}
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(8, 5))
+    width = 0.4
+    x = np.arange(len(all_cell_types))
+
+    for i, (key, count) in enumerate(counts.items()):
+        values = [count.get(t, 0) for t in all_cell_types]  # Fix: Now `count` is a Counter, so .get() works
+        ax.bar(x + i * width, values, width=width, label=key, color=key_colors[key])
+
+    # Labels and formatting
+    ax.set_xticks(x + width / 2)
+    ax.set_xticklabels(all_cell_types, ha='center')
+    ax.set_ylabel("Count")
+    ax.set_title("Cells connected to each glomerulus")
+    ax.legend(title="Glomerulus ID")
+
+    plt.show()
+
+
+def pretty_json(slices_dir, paramset='GammaSignature_SetupTime', \
+                file_names = ['glom_cells', 'GCs', 'MCs', 'TCs', 'GCs__MCs', 'GCs__TCs']):
+    #slices_dir = os.path.join('/home/ellismith/OlfactoryBulb-1/olfactorybulb/slices')
+
+    # files to make pretty
+    
+    for file_name in file_names:
+    # check whether pretty.json has already been created for original file
+        if not os.path.exists(f"{slices_dir}/{paramset}/{file_name}_pretty.json"):
+
+            # open original file
+            with open(f'{slices_dir}/{paramset}/{file_name}.json','r') as f:
+                cell = json.load(f)
+
+            # reformat original file with indentation
+            json_cell = json.dumps(cell,indent=4)
+
+            # write file with pretty formatting
+            with open(f"{slices_dir}/{paramset}/{file_name}_pretty.json", "w") as outfile:
+                outfile.write(json_cell)
 
