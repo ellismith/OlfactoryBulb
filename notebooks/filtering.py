@@ -8,7 +8,7 @@ except:
 
 from scipy import signal
 from scipy.interpolate import interp1d
-from scipy.signal import butter, lfilter, filtfilt
+from scipy.signal import butter, lfilter, filtfilt, sosfilt
 
 
 ############## INTERPOLATION, DOWNSAMPLING, FILTERING ################################
@@ -89,24 +89,28 @@ def bandpass_filter(data, lowcut, highcut, dt, order=5, filter_type='filtfilt'):
     nyquist = 0.5 * fs
     low = lowcut / nyquist
     high = highcut / nyquist
-    b, a = butter(order, [low, high], btype='band')
     
-    if filter_type == 'filtfilt':
-        y = filtfilt(b, a, data)
-    elif filter_type == 'lfilter':
-        y = lfilter(b, a, data)
+    if filter_type == 'sosfilt':
+        sos = butter(order, [low, high], btype='band', output='sos')  # Generate SOS format
+        y = sosfilt(sos, data)
     else:
-        raise ValueError("filter_type must be 'filtfilt' or 'lfilter'")
+        b, a = butter(order, [low, high], btype='band')  # Default TF coefficients
+        if filter_type == 'filtfilt':
+            y = filtfilt(b, a, data)
+        elif filter_type == 'lfilter':
+            y = lfilter(b, a, data)
+        else:
+            raise ValueError("filter_type must be 'filtfilt', 'lfilter', or 'sosfilt'")
     
     return y
 
 
 
 def filter_lfp(lfp, dt):
-    """Apply bandpass filters to the LFP signal."""
+    """Apply bandpass filters to the LFP signal. DELETE"""
     lfp_bp_low = butter_bandpass_filter(lfp, 1, 10, 1 / dt * 1000, order=3)
     lfp_bp_beta = butter_bandpass_filter(lfp, 15, 40, 1 / dt * 1000, order=3)
-    lfp_bp_gamma = butter_bandpass_filter(lfp, 3, 120, 1 / dt * 1000, order=3)
+    lfp_bp_gamma = butter_bandpass_filter(lfp, 30, 120, 1 / dt * 1000, order=3)
     lfp_bp_hfo = butter_bandpass_filter(lfp, 130, 200, 1 / dt * 1000, order=4)
     return lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo
 
