@@ -44,7 +44,7 @@ def plot_spectrogram(ax, f, t, power, wavelet=None, vmin=None, vmax=None, cmap_n
     print(f"f shape: {len(f)}")
     print(f"power shape: {power.shape}")
     # Plot the spectrogram
-    #cax = ax.pcolormesh(t, f, power, shading='gouraud', vmin=vmin, vmax=.3, cmap=colors)
+    #cax = ax.pcolormesh(t, f, power, shading='gouraud', vmin=vmin, vmax=vmax, cmap=colors)
     cax = ax.contourf(t, f, power, 256, vmin=vmin, vmax=vmax, cmap=cmap_name)
         
     # Add colorbadr
@@ -62,7 +62,7 @@ def plot_spectrogram(ax, f, t, power, wavelet=None, vmin=None, vmax=None, cmap_n
     return cax
 
 
-def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200):
+def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, vmin=None, vmax=None):
     """
     Plots stacked wavelet spectrograms based on the given configuration.
 
@@ -83,25 +83,25 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200):
     for i, (freq_range, wavelet, num_scale) in enumerate(zip(config["ranges"], config["wavelets"], config["num_scales"])):
         ax = plt.subplot(num_configs, 1, i + 1)
         # Compute the wavelet transform
-        frequencies, wavelet_power = compute_wavelet_transform(lfp, dt, num_scales=num_scale, wavelet=wavelet, 
+        cfs, frequencies, wavelet_power = compute_wavelet_transform(lfp, dt, num_scales=num_scale, wavelet=wavelet, 
                                                                scale_low=scale_low, scale_high=scale_high)
 
         print("scale_low:", scale_low)
         print("scale_high:", scale_high)
-
+        print("np.max(power) =", np.max(wavelet_power))
         # Plot the spectrogram
-        #ax.contourf(t, frequencies, wavelet_power, 256, cmap='jet')
+        ax.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
         #
         #print(max(t))
-        #ax.set_ylabel('Frequency [Hz]', fontsize=14)
-        #ax.set_xlabel('Simulation Time [ms]', fontsize=14)
+        ax.set_ylabel('Frequency [Hz]', fontsize=14)
+        ax.set_xlabel('Simulation Time [ms]', fontsize=14)
         #ax.set_xlim(0,max(t)-0.3)
         
         ax.set_ylim(freq_range)  # Set the frequency range for this spectrogram
         ax.set_xlim(min(t), max(t))
         ax.set_title(f"Wavelet: {wavelet}, Scales: {num_scale}, Freq range: {freq_range}", fontsize=18)
         
-        plot_spectrogram(ax, frequencies, t, wavelet_power, wavelet=None, vmin=None, vmax=None, cmap_name='jet')
+        #plot_spectrogram(ax, frequencies, t, wavelet_power, wavelet=None, vmin=vmin, vmax=vmax, cmap_name='jet')
         
 
     plt.tight_layout()
@@ -138,12 +138,12 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, params
         lfp_wavelet_power_average, 
         256, 
         vmin=0, 
-        vmax=None, 
+        vmax=0.3, 
         cmap=colors
     )
     
     plt.xlim((0, 200))
-    plt.ylim((20,120))
+    plt.ylim((20, 180))
 
     if yaxis:
         plt.ylabel('Frequency [Hz]', fontsize=14)
@@ -167,6 +167,9 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, params
     # Round colorbar ticks to 2 decimal places
     cbar.formatter = tkr.FormatStrFormatter('%.2f')
     cbar.update_ticks()
+
+    plt.title("Sniff Averaged LFP Wavelet power", fontsize=14)
+        
 
     if show:
         plt.show()
