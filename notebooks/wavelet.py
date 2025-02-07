@@ -3,6 +3,25 @@ import matplotlib.pyplot as plt
 import pywt   # pip install pywavelets
 from filtering import butter_bandpass_filter
 
+################## Load different wavelet types ############################
+def get_wavelets():
+    # continuous gaussian wavelets
+    wavelets = pywt.wavelist(kind='continuous')
+    wavelets_cgau = wavelets[0:8]
+
+    # gaussian wavelets
+    wavelets_gau = wavelets[10:18]
+
+    # complex morlet wavelets with different center frequencies and bandwidths
+    wavelets_cmor = [f"cmor{x:.1f}-{y:.1f}" for x in [1.0, 1.5, 2.0, 2.5] for y in [1.0, 1.5, 2.0, 2.5]]
+
+    # other wavelet types
+    wavelets_other = wavelets[18:21]
+    wavelets_other.append(wavelets[9])
+
+    return wavelets_cgau, wavelets_gau, wavelets_cmor, wavelets_other
+
+
 ######################## Analyzing and plotting frequency info #########################
 
 def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low=3, scale_high=200, normalize=False):
@@ -24,8 +43,7 @@ def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low
     lfp_bp = butter_bandpass_filter(lfp, 1, 200, 1 / dt * 1000, order=3)
     
     # Generate scales and compute the wavelet transform
-    print("scale_low:", scale_low)
-    print("scale_high:", scale_high)
+    
     scales = np.linspace(scale_low / dt, scale_high / dt, num_scales)
     # Generate scales (logarithmic distribution for better frequency resolution)
     #scales = np.logspace(np.log10(scale_low / dt), np.log10(scale_high / dt), num_scales)
@@ -43,7 +61,7 @@ def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low
     #t_wavelet = np.arange(len(lfp)) * (dt / 1000.0)  # Convert to seconds   
     
     # Return time, frequencies, and power
-    return frequencies, wavelet_power
+    return cfs, frequencies, wavelet_power   # fix functionality later
 
 
 def average_wavelet_power(lfp_wavelet_power, dt, sniff_count, sniff_rate):
