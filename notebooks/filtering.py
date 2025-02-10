@@ -10,6 +10,18 @@ from scipy import signal
 from scipy.interpolate import interp1d
 from scipy.signal import butter, lfilter, filtfilt, sosfilt
 
+def dt_to_nyquist(dt):
+    ''' 
+    dt: timestep (ms)
+    returns: 
+    nyquist: nyquist frequency (highest frequency that can be accurately captured without distortion caused by undersampling)
+    '''
+    dt_in_sec = dt * 0.001  # dt in ms to seconds
+    fs = 1 / dt_in_sec  # Sampling frequency (fs): how many samples per second (Hz)
+
+    nyquist = fs / 2
+    
+    return fs, nyquist
 
 ############## INTERPOLATION, DOWNSAMPLING, FILTERING ################################
 
