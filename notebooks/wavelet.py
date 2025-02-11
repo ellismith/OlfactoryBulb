@@ -24,7 +24,7 @@ def get_wavelets():
 
 ######################## Analyzing and plotting frequency info #########################
 
-def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", freq_low=1, freq_high=200, scale_low=1, scale_high=200):
+def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", lowcut=None, highcut=None, scale_low=1, scale_high=200, bp_order=3):
     """
     Computes the continuous wavelet transform of the bandpass-filtered LFP signal.
 
@@ -39,8 +39,13 @@ def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", freq_low=
     Returns:
         tuple: CWT coefficients, frequencies, and wavelet power.
     """
-    # Bandpass filter the LFP signal <200 Hz
-    lfp_bp = butter_bandpass_filter(lfp, freq_low, freq_high, 1 / dt * 1000, order=3)
+
+    if lowcut is not None and highcut is not None:
+        print("bandpass order:", bp_order)
+        lfp_bp = butter_bandpass_filter(lfp, lowcut, highcut, 1 / dt * 1000, order=bp_order)
+    else:
+        lfp_bp = lfp  # Skip filtering if no cut-off frequencies are provided
+
     
     # Generate scales 
     scales = np.linspace(scale_low / dt, scale_high / dt, num_scales)
@@ -52,6 +57,8 @@ def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", freq_low=
     
     # Compute wavelet power
     wavelet_power = np.log(1 + abs(cfs))
+
+    print(np.max(wavelet_power))
     
     return cfs, frequencies, wavelet_power   
 
