@@ -24,9 +24,9 @@ def get_wavelets():
 
 ######################## Analyzing and plotting frequency info #########################
 
-def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low=3, scale_high=200, normalize=False):
+def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", freq_low=1, freq_high=200, scale_low=1, scale_high=200):
     """
-    Computes the wavelet transform of the bandpass-filtered LFP signal.
+    Computes the continuous wavelet transform of the bandpass-filtered LFP signal.
 
     Parameters:
         lfp (array): Local field potential (LFP) signal.
@@ -37,31 +37,23 @@ def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low
         scale_high (float): Upper bound of the scale range.
 
     Returns:
-        tuple: Time vector, frequencies, and wavelet power.
+        tuple: CWT coefficients, frequencies, and wavelet power.
     """
-    # Bandpass filter the LFP signal
-    lfp_bp = butter_bandpass_filter(lfp, 1, 200, 1 / dt * 1000, order=3)
+    # Bandpass filter the LFP signal <200 Hz
+    lfp_bp = butter_bandpass_filter(lfp, freq_low, freq_high, 1 / dt * 1000, order=3)
     
-    # Generate scales and compute the wavelet transform
-    
+    # Generate scales 
     scales = np.linspace(scale_low / dt, scale_high / dt, num_scales)
-    # Generate scales (logarithmic distribution for better frequency resolution)
+    # Generate scales (logarithmic distribution)
     #scales = np.logspace(np.log10(scale_low / dt), np.log10(scale_high / dt), num_scales)
     
+    # Compute continuous wavelet transform
     cfs, frequencies = pywt.cwt(lfp_bp, scales, wavelet, dt / 1000.0)
     
     # Compute wavelet power
     wavelet_power = np.log(1 + abs(cfs))
-
-    # Normalize wavelet power if requested
-    if normalize:
-        wavelet_power /= np.max(wavelet_power)
     
-    # Create time vector for plotting
-    #t_wavelet = np.arange(len(lfp)) * (dt / 1000.0)  # Convert to seconds   
-    
-    # Return time, frequencies, and power
-    return cfs, frequencies, wavelet_power   # fix functionality later
+    return cfs, frequencies, wavelet_power   
 
 
 def average_wavelet_power(lfp_wavelet_power, dt, sniff_count, sniff_rate):
