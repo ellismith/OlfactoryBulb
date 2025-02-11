@@ -18,7 +18,7 @@ from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
 from filtering import *
 
 
-def compute_stft(lfp, dt, nperseg, nfft, noverlap, lowcut=None, highcut=None, order=4, if_padded=True):
+def compute_stft(lfp, dt, nperseg, nfft, noverlap, lowcut=None, highcut=None, bp_order=4, if_padded=True):
     """
     Optionally filters the LFP signal and computes its Short-Time Fourier Transform (STFT) and power.
     
@@ -35,7 +35,7 @@ def compute_stft(lfp, dt, nperseg, nfft, noverlap, lowcut=None, highcut=None, or
     Returns:
     tuple:
         sos (array or None): Second-order sections of the bandpass filter (None if filtering is skipped).
-        filtered_lfp (array): Filtered LFP signal (or raw LFP if filtering is skipped).
+        lfp_bp (array): Filtered LFP signal (or raw LFP if filtering is skipped).
         f (array): Array of sample frequencies.
         t (array): Array of segment times.
         Sxx (2D array): STFT of the LFP signal (complex values).
@@ -47,22 +47,17 @@ def compute_stft(lfp, dt, nperseg, nfft, noverlap, lowcut=None, highcut=None, or
     sos = None  # Initialize filter as None
 
     if lowcut is not None and highcut is not None:
-        low = lowcut / nyquist
-        high = highcut / nyquist
-        if not (0 < low < high < 1):
-            raise ValueError(f"Invalid filter frequencies: low={lowcut}, high={highcut}, nyquist={nyquist}")
-        sos = butter(order, [low, high], btype='bandpass', output='sos')
-        filtered_lfp = sosfilt(sos, lfp)
+        lfp_bp = butter_bandpass_filter(lfp, lowcut, highcut, 1 / dt * 1000, order=bp_order)
     else:
-        filtered_lfp = lfp  # Skip filtering if no cut-off frequencies are provided
+        lfp_bp = lfp  # Skip filtering if no cut-off frequencies are provided
     
     # Compute the Short-Time Fourier Transform (STFT)
-    frequencies, t, Sxx = stft(filtered_lfp, fs, nperseg=nperseg, nfft=nfft, noverlap=noverlap, padded=if_padded)
+    frequencies, t, Sxx = stft(lfp_bp, fs, nperseg=nperseg, nfft=nfft, noverlap=noverlap, padded=if_padded)
     
     # Compute power (magnitude squared)
     power = np.abs(Sxx) ** 2
     
-    return sos, filtered_lfp, frequencies, t, Sxx, power
+    return sos, lfp_bp, frequencies, t, Sxx, power
 
 
 def get_lfp_fft(paramset, ax, nperseg, nfft, vmin=None, lowcut=30, highcut=80, order=5, cmap_name='jet'):
