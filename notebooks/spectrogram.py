@@ -63,7 +63,7 @@ def plot_spectrogram(ax, f, t, power, wavelet=None, vmin=None, vmax=None, cmap_n
     return cax
 
 
-def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, vmin=None, vmax=None):
+def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, bp_order=3, vmin=None, vmax=None):
     """
     Plots stacked wavelet spectrograms based on the given configuration.
 
@@ -85,12 +85,12 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, vmin=N
         ax = plt.subplot(num_configs, 1, i + 1)
         # Compute the wavelet transform
         cfs, frequencies, wavelet_power = compute_wavelet_transform(lfp, dt, num_scales=num_scale, wavelet=wavelet, \
-                                                                    freq_low=freq_range[0], freq_high=freq_range[1], \
-                                                                    scale_low=scale_low, scale_high=scale_high)
+                                                                    lowcut=freq_range[0], highcut=freq_range[1], \
+                                                                    scale_low=scale_low, scale_high=scale_high, bp_order=bp_order)
 
         #print("np.max(power) =", np.max(wavelet_power))
         # Plot the spectrogram
-        ax.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
+        contour = ax.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
 
         ax.set_xlim(min(t), max(t))
         ax.set_xlabel('Simulation Time [ms]', fontsize=14)
@@ -99,7 +99,17 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, vmin=N
         ax.set_ylabel('Frequency [Hz]', fontsize=14)
         
         ax.set_title(f"Wavelet: {wavelet}, Scales: {num_scale}, Freq range: {freq_range}", fontsize=18)
-   
+
+         # Add a colorbar
+        cbar = plt.colorbar(contour, pad=0.02)
+        cbar.set_label('Wavelet Power', fontsize=14)
+        cbar.ax.tick_params(labelsize=12)
+
+        # Round colorbar ticks to 2 decimal places
+        cbar.formatter = tkr.FormatStrFormatter('%.2f')
+        cbar.update_ticks()
+
+    
     plt.tight_layout()
     plt.show()
 
@@ -253,7 +263,7 @@ def plot_sniff_average_stft(lfp, params_dict, fs, nperseg, lowcut, highcut, orde
 
 
 
-def plot_lfp_stft_stacked(t, lfp, dt, config, lowcut=1, highcut=200, cmap_name='jet', vmin=None, vmax=None):
+def plot_lfp_stft_stacked(t, lfp, dt, config, lowcut=1, highcut=200, bp_order=4, cmap_name='jet', vmin=None, vmax=None):
     """
     Plots stacked STFT spectrograms based on the given configuration.
 
@@ -274,7 +284,7 @@ def plot_lfp_stft_stacked(t, lfp, dt, config, lowcut=1, highcut=200, cmap_name='
     for i, (freq_range, nperseg, nfft, noverlap) in enumerate(zip(config["ranges"], config["npersegs"], config["nffts"], config["noverlaps"])):
         ax = plt.subplot(num_configs, 1, i + 1)
 
-        sos, filtered_lfp, frequencies, t, Sxx, power= compute_stft(lfp, dt, nperseg, nfft, noverlap, lowcut=lowcut, highcut=highcut, order=3, if_padded=False)
+        sos, filtered_lfp, frequencies, t, Sxx, power= compute_stft(lfp, dt, nperseg, nfft, noverlap, lowcut=lowcut, highcut=highcut, bp_order=bp_order, if_padded=False)
         
         ax.contourf(t, frequencies, power, 128, vmin=vmin, vmax=vmax, cmap=cmap_name)
         #ax.pcolormesh(t, frequencies, power, shading='gouraud', vmin=vmin, vmax=vmax, cmap=cmap_name)
