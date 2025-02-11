@@ -27,17 +27,20 @@ def mix_colors(color1, color2):
 
 def get_toy_data(f1=28, f2=70, f3=150, dt=0.1, duration=2000):
     '''
+    f1: low frequency component (Hz)
+    f2: middle frequency component (Hz)
+    f3: high frequency component (Hz) 
     dt: time step (ms)
     duration: total time (ms)
     '''
-    t = np.arange(0, duration, dt)  # Time vector in ms
+    t= np.arange(0, duration, dt)  # Time vector in ms
 
     # Create an LFP signal with low (5 Hz), medium (40 Hz), and high-frequency (150 Hz) components, plus noise
     toy_lfp_signal = (
         0.2 * np.sin(2 * np.pi * (f1 / 1000) * t) +            # f1 Hz component (converted to kHz)
-        0.3 * np.sin(2 * np.pi * (f2 / 1000) * t) +           # f2 Hz component (converted to kHz)
-        (0.5 * np.sin(2 * np.pi * (0.5 / 1000) * t)) *        # Envelope at 0.5 Hz (converted to kHz)
-        np.sin(2 * np.pi * (f3 / 1000) * t) +                # f3 Hz component (converted to kHz)
+        (0.3 * np.sin(2 * np.pi * (0.5 / 1000) * t)) *        # Envelope at 0.5 Hz
+        0.8 * np.sin(2 * np.pi * (f2 / 1000) * t) +           # f2 Hz component 
+        0.2 * np.sin(2 * np.pi * (f3 / 1000) * t) +           # f3 Hz component 
         0.1 * np.random.randn(len(t))                        # Random noise
     )
 
@@ -49,8 +52,8 @@ def show_subplot(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
 
     fig_width = 27
-    events, vs, spike_times, t, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
-        lfp_wavelet_power, scales, wavelet, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+    events, vs, spike_times, t, lfp, lfp_bp_low, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
     
     print("paramset:", paramset)
 
@@ -221,8 +224,8 @@ def show_subplot2(paramset, params_short=True):
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
 
     fig_width = 27
-    events, vs, spike_times, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+    events, vs, spike_times, t, lfp, lfp_bp_low, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
     
     if 'dt' in params_dict:
         dt = params_dict['dt']
@@ -318,8 +321,8 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1
     print("results_dir:", results_dir)
 
     fig_width = 27
-    events, vs, spike_times, t_lfp, lfp, lfp_bp_low, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+    events, vs, spike_times, t, lfp, lfp_bp_low, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
     print("lfp_pkl_file:", lfp_pkl_file)
 
     if 'dt' in params_dict:
@@ -375,7 +378,7 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1
     ax[0].set_xlabel('Simulation Time [ms]', fontsize=18)
     ax[0].set_xlim(min_t, max_t)
 
-    t = t_lfp
+    #t = t_lfp
 
     ax[1].margins(0)
     ax[1].plot(t, lfp * 10000 + 200, label='raw', color='black')
