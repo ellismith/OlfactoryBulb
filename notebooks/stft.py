@@ -18,7 +18,7 @@ from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
 from filtering import *
 
 
-def compute_stft(lfp, dt, nperseg, nfft, lowcut=None, highcut=None, order=4, if_padded=True):
+def compute_stft(lfp, dt, nperseg, nfft, noverlap, lowcut=None, highcut=None, order=4, if_padded=True):
     """
     Optionally filters the LFP signal and computes its Short-Time Fourier Transform (STFT) and power.
     
@@ -57,7 +57,7 @@ def compute_stft(lfp, dt, nperseg, nfft, lowcut=None, highcut=None, order=4, if_
         filtered_lfp = lfp  # Skip filtering if no cut-off frequencies are provided
     
     # Compute the Short-Time Fourier Transform (STFT)
-    frequencies, t, Sxx = stft(filtered_lfp, fs, nperseg=nperseg, nfft=nfft, padded=if_padded)
+    frequencies, t, Sxx = stft(filtered_lfp, fs, nperseg=nperseg, nfft=nfft, noverlap=noverlap, padded=if_padded)
     
     # Compute power (magnitude squared)
     power = np.abs(Sxx) ** 2
