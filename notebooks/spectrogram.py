@@ -18,6 +18,7 @@ from load import *
 import pywt
 from wavelet import *
 from filtering import *
+from stft import *
 
 def plot_spectrogram(ax, f, t, power, wavelet=None, vmin=None, vmax=None, cmap_name='jet'):
     """
@@ -70,7 +71,7 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, vmin=N
         t (array): Time vector (ms).
         lfp (array): Local field potential signal.
         dt (float): Time step of the simulation (ms).
-        config (dict): Configuration dictionary containing settings for ranges, wavelets, and scales.
+        config (dict): Configuration dictionary containing settings for freq ranges, wavelets, and scales.
             config = {"ranges": [(20,200), (20,200), (20,200)],
             "wavelets": ["cgau5", "cgau6", "cgau7"],
             "num_scales": [50, 50, 50]}
@@ -83,27 +84,22 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, vmin=N
     for i, (freq_range, wavelet, num_scale) in enumerate(zip(config["ranges"], config["wavelets"], config["num_scales"])):
         ax = plt.subplot(num_configs, 1, i + 1)
         # Compute the wavelet transform
-        cfs, frequencies, wavelet_power = compute_wavelet_transform(lfp, dt, num_scales=num_scale, wavelet=wavelet, 
-                                                               scale_low=scale_low, scale_high=scale_high)
+        cfs, frequencies, wavelet_power = compute_wavelet_transform(lfp, dt, num_scales=num_scale, wavelet=wavelet, \
+                                                                    freq_low=freq_range[0], freq_high=freq_range[1], \
+                                                                    scale_low=scale_low, scale_high=scale_high)
 
-        print("scale_low:", scale_low)
-        print("scale_high:", scale_high)
-        print("np.max(power) =", np.max(wavelet_power))
+        #print("np.max(power) =", np.max(wavelet_power))
         # Plot the spectrogram
         ax.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
-        #
-        #print(max(t))
-        ax.set_ylabel('Frequency [Hz]', fontsize=14)
-        ax.set_xlabel('Simulation Time [ms]', fontsize=14)
-        #ax.set_xlim(0,max(t)-0.3)
-        
-        ax.set_ylim(freq_range)  # Set the frequency range for this spectrogram
-        ax.set_xlim(min(t), max(t))
-        ax.set_title(f"Wavelet: {wavelet}, Scales: {num_scale}, Freq range: {freq_range}", fontsize=18)
-        
-        #plot_spectrogram(ax, frequencies, t, wavelet_power, wavelet=None, vmin=vmin, vmax=vmax, cmap_name='jet')
-        
 
+        ax.set_xlim(min(t), max(t))
+        ax.set_xlabel('Simulation Time [ms]', fontsize=14)
+
+        ax.set_ylim(freq_range)  # Set the frequency range for this spectrogram
+        ax.set_ylabel('Frequency [Hz]', fontsize=14)
+        
+        ax.set_title(f"Wavelet: {wavelet}, Scales: {num_scale}, Freq range: {freq_range}", fontsize=18)
+   
     plt.tight_layout()
     plt.show()
 
@@ -257,30 +253,39 @@ def plot_sniff_average_stft(lfp, params_dict, fs, nperseg, lowcut, highcut, orde
 
 
 
-def plot_lfp_fft_stacked(paramset, order, nfft, nperseg_vmin_dict, lowcut=30, highcut=80, cmap_name='jet'):
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-    frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
-    
-    assert dt == (t_lfp[1] - t_lfp[0])
-    dt_in_sec = dt * 0.001
-    fs = 1 / dt_in_sec
+def plot_lfp_stft_stacked(t, lfp, dt, config, lowcut=1, highcut=200, cmap_name='jet', vmin=None, vmax=None):
+    """
+    Plots stacked STFT spectrograms based on the given configuration.
 
-    fig, axes = plt.subplots(len(nperseg_vmin_dict), 1, figsize=(10, 3 * len(nperseg_vmin_dict)))
-    
-    if len(nperseg_vmin_dict) == 1:
-        axes = [axes]
-    
-    for i, (nperseg, vmin) in enumerate(nperseg_vmin_dict.items()):
-        ax = axes[i]
-        sos, filtered_lfp, f, t, Sxx = filter_and_transform_lfp(lfp, fs, nperseg=nperseg, nfft=nfft, lowcut=lowcut, highcut=highcut, order=order, if_padded=False)
-        vmin = vmin if vmin else None
-        print(vmin)
+    Parameters:
+        t (array): Time vector (ms).
+        lfp (array): Local field potential signal.
+        dt (float): Time step of the simulation (ms).
+        config (dict): Configuration dictionary containing settings for ranges, wavelets, and scales.
+            config = {"ranges": [(20,200), (20,200), (20,200)],
+            "npersegs": [256, 512, 1024],
+            "nffts": [256, 512, 1024],
+            "noverlaps": [128, 256, 512]}
+    """
+    num_configs = len(config["ranges"])
+    plt.figure(figsize=(18, 5 * num_configs))  # Adjust figure height for stacked plots
 
-        #np.log(Sxx)
-        cax = plot_spectrogram(ax, f, t, Sxx, nperseg=nperseg, nfft=nfft, order=order, vmin=vmin, vmax=-3, cmap_name=cmap_name)
-        #fig.colorbar(cax, ax=ax, label='LFP Wavelet Power ($V^2/Hz$)', pad=0.02)
-    
-    
+    # Loop through each configuration to generate a spectrogram
+    for i, (freq_range, nperseg, nfft, noverlap) in enumerate(zip(config["ranges"], config["npersegs"], config["nffts"], config["noverlaps"])):
+        ax = plt.subplot(num_configs, 1, i + 1)
+
+        sos, filtered_lfp, frequencies, t, Sxx, power= compute_stft(lfp, dt, nperseg, nfft, noverlap, lowcut=lowcut, highcut=highcut, order=3, if_padded=False)
+        
+        ax.contourf(t, frequencies, power, 128, vmin=vmin, vmax=vmax, cmap=cmap_name)
+        #ax.pcolormesh(t, frequencies, power, shading='gouraud', vmin=vmin, vmax=vmax, cmap=cmap_name)
+        ax.set_ylabel('Frequency [Hz]', fontsize=14)
+        ax.set_xlabel('Simulation Time [s]', fontsize=14)
+        #ax.set_xlim(0,max(t)-0.3)
+        print(np.max(power))
+        ax.set_ylim(freq_range)  # Set the frequency range for this spectrogram
+        ax.set_xlim(min(t), max(t))
+        ax.set_title(f"nperseg: {nperseg}, nfft: {nfft}, noverlap: {noverlap}, Freq range: {freq_range}", fontsize=18)
+        
     plt.tight_layout()
     plt.subplots_adjust(hspace=0.5)  # Adjust vertical space between plots
     plt.show()
