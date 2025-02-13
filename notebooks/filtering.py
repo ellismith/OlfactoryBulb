@@ -10,19 +10,6 @@ from scipy import signal
 from scipy.interpolate import interp1d
 from scipy.signal import butter, lfilter, filtfilt, sosfilt
 
-def dt_to_nyquist(dt):
-    ''' 
-    dt: timestep (ms)
-    returns: 
-    nyquist: nyquist frequency (highest frequency that can be accurately captured without distortion caused by undersampling)
-    '''
-    dt_in_sec = dt * 0.001  # dt in ms to seconds
-    fs = 1 / dt_in_sec  # Sampling frequency (fs): how many samples per second (Hz)
-
-    nyquist = fs / 2
-    
-    return fs, nyquist
-
 ############## INTERPOLATION, DOWNSAMPLING, FILTERING ################################
 
 def interpolate(x, y, dt):
@@ -64,25 +51,8 @@ def downsample_lfp(t, lfp, n):
     return t_downsampled, lfp_downsampled
 
 
-
-def butter_bandpass(lowcut, highcut, fs, order=5):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = butter(order, [low, high], btype='band')
-    return b, a
-
-
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
-    """
-    To bandpass filter the LFP signal in certain frequency ranges
-    """
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = lfilter(b, a, data)
-    return y
-
 # Define bandpass filter function with adjustable filter type and dt in milliseconds
-def bandpass_filter(data, lowcut, highcut, dt, order=5, filter_type='filtfilt'):
+def bandpass_filter(data, lowcut, highcut, dt, order=4, filter_type='sosfilt'):
     """
     Bandpass filters the data between lowcut and highcut frequencies.
     
@@ -92,16 +62,19 @@ def bandpass_filter(data, lowcut, highcut, dt, order=5, filter_type='filtfilt'):
     - highcut: float, higher cutoff frequency in Hz
     - dt: float, time step in milliseconds
     - order: int, order of the filter
-    - filter_type: str, 'filtfilt' (zero-phase filtering) or 'lfilter' (causal filtering)
+    - filter_type: str, 'filtfilt' (zero-phase filtering) 'lfilter' (causal filtering), or 'sosfilt' (2nd order)
     
     Returns:
-    - y: array-like, the bandpass-filtered signal
+    - y: array-like, the bandpass-filtered siCgnal
     """
-    fs = 1000.0 / dt  # Convert dt in ms to sampling frequency in Hz
+    dt_in_sec = dt * 0.001
+    fs = 1 / dt_in_sec  # Convert dt in s to sampling frequency in Hz
+    assert fs == 10000
     nyquist = 0.5 * fs
     low = lowcut / nyquist
     high = highcut / nyquist
     
+    print(filter_type)
     if filter_type == 'sosfilt':
         sos = butter(order, [low, high], btype='band', output='sos')  # Generate SOS format
         y = sosfilt(sos, data)
@@ -116,15 +89,6 @@ def bandpass_filter(data, lowcut, highcut, dt, order=5, filter_type='filtfilt'):
     
     return y
 
-
-
-def filter_lfp(lfp, dt):
-    """Apply bandpass filters to the LFP signal. DELETE"""
-    lfp_bp_low = butter_bandpass_filter(lfp, 1, 10, 1 / dt * 1000, order=3)
-    lfp_bp_beta = butter_bandpass_filter(lfp, 15, 40, 1 / dt * 1000, order=3)
-    lfp_bp_gamma = butter_bandpass_filter(lfp, 30, 120, 1 / dt * 1000, order=3)
-    lfp_bp_hfo = butter_bandpass_filter(lfp, 130, 200, 1 / dt * 1000, order=4)
-    return lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo
 
 
 def bandpass_filter_spikes(spike_train, lowcut, highcut, fs, order=5):
