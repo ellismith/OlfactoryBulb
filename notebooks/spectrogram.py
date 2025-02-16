@@ -45,9 +45,10 @@ def plot_spectrogram(ax, f, t, power, wavelet=None, vmin=None, vmax=None, cmap_n
     print(f"f shape: {len(f)}")
     print(f"power shape: {power.shape}")
     # Plot the spectrogram
-    #cax = ax.pcolormesh(t, f, power, shading='gouraud', vmin=vmin, vmax=vmax, cmap=colors)
+    #cax = ax.pcolormesh(t, f, power, shading='gouraud', vmin=vmin, vmax=vmax, cmap=cmap_name)
     cax = ax.contourf(t, f, power, 256, vmin=vmin, vmax=vmax, cmap=cmap_name)
-        
+
+
     # Add colorbadr
     cbar = plt.colorbar(cax, ax=ax)
     cbar.set_label('LFP Power ($V^2/Hz$)', fontsize=12)
@@ -63,7 +64,7 @@ def plot_spectrogram(ax, f, t, power, wavelet=None, vmin=None, vmax=None, cmap_n
     return cax
 
 
-def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, bp_order=3, vmin=None, vmax=None):
+def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, bp_order=6, vmin=None, vmax=None):
     """
     Plots stacked wavelet spectrograms based on the given configuration.
 
@@ -75,6 +76,9 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, bp_ord
             config = {"ranges": [(20,200), (20,200), (20,200)],
             "wavelets": ["cgau5", "cgau6", "cgau7"],
             "num_scales": [50, 50, 50]}
+        scale_low (float): Lower bound of the scale range.
+        scale_high (float): Upper bound of the scale range.
+        bp_order: bandpass filter order value
     """
 
     num_configs = len(config["ranges"])
@@ -91,6 +95,7 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, bp_ord
         #print("np.max(power) =", np.max(wavelet_power))
         # Plot the spectrogram
         contour = ax.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
+        #contour = ax.pcolormesh(t, frequencies, wavelet_power, shading='gouraud', vmin=vmin, vmax=vmax, cmap='jet')   # pcolormesh is poor resolution
 
         ax.set_xlim(min(t), max(t))
         ax.set_xlabel('Simulation Time [ms]', fontsize=14)
@@ -98,9 +103,7 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, bp_ord
         ax.set_ylim(freq_range)  # Set the frequency range for this spectrogram
         ax.set_ylabel('Frequency [Hz]', fontsize=14)
         
-        ax.set_title(f"Wavelet: {wavelet}, Scales: {num_scale}, Freq range: {freq_range}", fontsize=18)
-
-         # Add a colorbar
+        # Add a colorbar
         cbar = plt.colorbar(contour, pad=0.02)
         cbar.set_label('Wavelet Power', fontsize=14)
         cbar.ax.tick_params(labelsize=12)
@@ -109,7 +112,8 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, bp_ord
         cbar.formatter = tkr.FormatStrFormatter('%.2f')
         cbar.update_ticks()
 
-    
+        ax.set_title(f"Wavelet: {wavelet}, Scales: {num_scale}, Freq range: {freq_range}", fontsize=18)
+
     plt.tight_layout()
     plt.show()
 
@@ -284,7 +288,7 @@ def plot_lfp_stft_stacked(t, lfp, dt, config, lowcut=1, highcut=200, bp_order=4,
     for i, (freq_range, nperseg, nfft, noverlap) in enumerate(zip(config["ranges"], config["npersegs"], config["nffts"], config["noverlaps"])):
         ax = plt.subplot(num_configs, 1, i + 1)
 
-        sos, filtered_lfp, frequencies, t, Sxx, power= compute_stft(lfp, dt, nperseg, nfft, noverlap, lowcut=lowcut, highcut=highcut, bp_order=bp_order, if_padded=False)
+        frequencies, t, Sxx, power= compute_stft(lfp, dt, nperseg, nfft, noverlap, lowcut=lowcut, highcut=highcut, bp_order=bp_order, if_padded=False)
         
         ax.contourf(t, frequencies, power, 128, vmin=vmin, vmax=vmax, cmap=cmap_name)
         #ax.pcolormesh(t, frequencies, power, shading='gouraud', vmin=vmin, vmax=vmax, cmap=cmap_name)
