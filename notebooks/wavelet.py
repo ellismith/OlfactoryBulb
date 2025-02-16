@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pywt   # pip install pywavelets
-from filtering import butter_bandpass_filter
+from filtering import bandpass_filter2
 
 ################## Load different wavelet types ############################
 def get_wavelets():
@@ -24,7 +24,8 @@ def get_wavelets():
 
 ######################## Analyzing and plotting frequency info #########################
 
-def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", lowcut=None, highcut=None, scale_low=1, scale_high=200, bp_order=3):
+
+def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", lowcut=None, highcut=None, scale_low=1, scale_high=200, bp_order=6):
     """
     Computes the continuous wavelet transform of the bandpass-filtered LFP signal.
 
@@ -42,15 +43,13 @@ def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", lowcut=No
 
     if lowcut is not None and highcut is not None:
         print("bandpass order:", bp_order)
-        lfp_bp = butter_bandpass_filter(lfp, lowcut, highcut, 1 / dt * 1000, order=bp_order)
+        lfp_bp = bandpass_filter2(lfp, lowcut, highcut, dt, order=bp_order)
     else:
         lfp_bp = lfp  # Skip filtering if no cut-off frequencies are provided
 
     
     # Generate scales 
-    scales = np.linspace(scale_low / dt, scale_high / dt, num_scales)
-    # Generate scales (logarithmic distribution)
-    #scales = np.logspace(np.log10(scale_low / dt), np.log10(scale_high / dt), num_scales)
+    scales = np.linspace(scale_low/dt, scale_high/dt, num_scales)
     
     # Compute continuous wavelet transform
     cfs, frequencies = pywt.cwt(lfp_bp, scales, wavelet, dt / 1000.0)
@@ -61,6 +60,8 @@ def compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", lowcut=No
     print(np.max(wavelet_power))
     
     return cfs, frequencies, wavelet_power   
+
+  
 
 
 def average_wavelet_power(lfp_wavelet_power, dt, sniff_count, sniff_rate):
