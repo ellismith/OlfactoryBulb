@@ -8,7 +8,7 @@ except:
 
 from scipy import signal
 from scipy.interpolate import interp1d
-from scipy.signal import butter, lfilter, filtfilt, sosfilt
+from scipy.signal import butter, lfilter, filtfilt, freqz, sosfilt, sosfiltfilt, sosfreqz, ellip, unit_impulse
 
 ############## INTERPOLATION, DOWNSAMPLING, FILTERING ################################
 
@@ -91,6 +91,62 @@ def bandpass_filter(data, lowcut, highcut, dt, order=4, filter_type='sosfilt'):
 
 
 
+
+
+def bandpass_filter2(data, fc_low_Hz, fc_high_Hz, dt_ms, order=6, filter_type='sosfiltfilt'):
+    """
+    Bandpass filters the data between fc_low_Hz and fc_high_Hz frequencies.
+
+    Use sosfilt or sosfiltfilt for most filtering tasks, as second-order sections have fewer numerical problems.
+
+    The sosfiltfilt or filtfilt zero-phase filters apply a linear digital filter twice, once forward and once 
+    backwards, reulting in zero phase and a filter order twice that of the original.
+
+    Parameters:
+        - data: array-like, the signal to be filtered
+        - fc_low_Hz: float, lower cutoff frequency in Hz
+        - fc_high_Hz: float, higher cutoff frequency in Hz
+        - dt_ms: float, time step in milliseconds
+        - order: int, order of the filter
+        - filter_type: str, 'sosfilt'       # preferred sos: causal
+                            'sosfiltfilt'   # preferred sos: zero-phase
+                            'lfilter'       # discouraged TF: causal
+                            'filtfilt'      # discouraged TF: zero-phase
+    Returns:
+        - y: array-like, the bandpass-filtered signal
+    """
+    # convert dt in ms to sampling frequency in Hz:
+    fs_Hz = 1000.0 / dt_ms
+    # Wn units [low, high] are normalized from 0 to 1, where 1 is the Nyquist frequency:
+    nyquist = 0.5 * fs_Hz
+    low = fc_low_Hz / nyquist
+    high = fc_high_Hz / nyquist
+
+    # SOS format, causal:
+    if filter_type == 'sosfilt':
+        sos = butter(order, [low, high], btype='band', output='sos')    # must NOT have fs passed
+        y = sosfilt(sos, data)
+
+    # SOS format, zero-phase:
+    elif filter_type == 'sosfiltfilt':
+        sos = butter(order, [low, high], btype='band', output='sos')    # must NOT have fs passed
+        y = sosfiltfilt(sos, data)
+
+    # TF coefficients, causal:
+    elif filter_type == 'lfilter':  
+        b, a = butter(order, [fc_low_Hz, fc_high_Hz], fs=fs_Hz, btype='band', output='ba') 
+        y = lfilter(b, a, data)
+
+    # TF coefficients, zero-phase:
+    elif filter_type == 'filtfilt':
+        b, a = butter(order, [fc_low_Hz, fc_high_Hz], fs=fs_Hz, btype='band', output='ba') 
+        y = filtfilt(b, a, data)
+    else:
+        raise ValueError("filter_type must be 'sosfilt', 'sosfiltfilt', 'lfilter', or 'filtfilt'")
+    return y
+
+
+
 def bandpass_filter_spikes(spike_train, lowcut, highcut, fs, order=5):
     """
     Apply a bandpass filter to a spike train using the provided butter_bandpass_filter function.
@@ -167,9 +223,9 @@ def plot_bandpassed_signals(lfp_signal, t, dt, \
     #mid_lim2 = 100
     #high_lim = 200
     
-    low_freq_signal = bandpass_filter(lfp_signal, low_lim, mid_lim1, dt, order=order, filter_type=filter_type)
-    medium_freq_signal = bandpass_filter(lfp_signal, mid_lim1, mid_lim2, dt, order=order, filter_type=filter_type)
-    high_freq_signal = bandpass_filter(lfp_signal, mid_lim2, high_lim, dt, order=order, filter_type=filter_type)
+    low_freq_signal = bandpass_filter2(lfp_signal, low_lim, mid_lim1, dt, order=order, filter_type=filter_type)
+    medium_freq_signal = bandpass_filter2(lfp_signal, mid_lim1, mid_lim2, dt, order=order, filter_type=filter_type)
+    high_freq_signal = bandpass_filter2(lfp_signal, mid_lim2, high_lim, dt, order=order, filter_type=filter_type)
 
     # Create subplots
     fig, ax = plt.subplots(4, 1, figsize=(12, 8), sharex=True)
@@ -208,3 +264,38 @@ def plot_bandpassed_signals(lfp_signal, t, dt, \
     plt.show()
 
 
+def compare_orders(signal, sampling_rate, t) :
+    """
+    Apply bandpass filters with different orders and compare the filtered signals.
+
+    Parameters:
+    - signal: np.ndarray - The input signal to be filtered.
+    - sampling_rate: float - The sampling rate of the signal in Hz.
+    - t: np.ndarray - Time vector corresponding to the signal.
+
+    Returns:
+    - None: Displays a plot comparing bandpass filtered signals at different filter orders.
+    """
+    # Apply bandpass filters with different orders and compare
+    lowcut = 60
+    highcut = 90
+    orders = [3, 5, 7, 9]
+
+    plt.figure(figsize=(10, 10))
+
+    for i, order in enumerate(orders):
+        filtered_signal_sos = bandpass_filter(signal, lowcut, highcut, sampling_rate, order=order, filtfilt=False)
+        filtered_signal_sosfiltfilt = bandpass_filter(signal, lowcut, highcut, sampling_rate, order=order * 2, filtfilt=True)
+
+        plt.subplot(len(orders), 1, i + 1)
+        plt.plot(t, filtered_signal_sos, label=f'sosfilt (order={order})')
+        plt.plot(t, filtered_signal_sosfiltfilt, label=f'sosfiltfilt (order={order * 2})')
+        plt.xlabel('Time [s]')
+        plt.xlim(0,0.5)
+        plt.ylabel('Amplitude')
+        plt.title(f'Bandpass Filtered Signals ({lowcut}-{highcut} Hz) - Order {order} / {order * 2}')
+        plt.legend()
+        plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
