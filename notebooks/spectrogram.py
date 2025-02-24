@@ -151,7 +151,7 @@ def compute_sniff_average(params_dict, t, lfp, dt_ms, wavelet):
     return t_average, frequencies, lfp_wavelet_power_average
 
 
-def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average):
+def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, vmax):
     """
     Plot the average sniff wavelet power as a contour plot with a colorbar.
     
@@ -175,7 +175,7 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average):
         lfp_wavelet_power_average, 
         256, 
         vmin=0, 
-        vmax=0.3, 
+        vmax=vmax, 
         cmap=colors
     )
 
