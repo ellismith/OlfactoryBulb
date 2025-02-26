@@ -26,10 +26,8 @@ from scipy.stats import ttest_ind
 import pyspike as spk
 from filtering import *
 
-def get_spike_trains(trains, t_start=0, t_end=1800):
-    return [spk.SpikeTrain(spike_times=st, edges=[t_start, t_end], is_sorted=True) for st in trains]
 
-
+# Step 1: Extract spike times by cell type
 def extract_spike_times_by_cell_type(spike_times, cell_types):
     """
     Extract spike times for each cell type from the spike_times data.
@@ -52,40 +50,88 @@ def extract_spike_times_by_cell_type(spike_times, cell_types):
     return cell_type_spike_times
 
 
+# Step 2: Convert spike times to SpikeTrain objects
+def get_spike_trains(trains, t_start=0, t_end=1800):
+    return [spk.SpikeTrain(spike_times=st, edges=[t_start, t_end], is_sorted=True) for st in trains]
+
+
+# Step 3: Compute synchrony
+def compute_synchrony(spike_times, cell_types, compare_within=False, t_start=0, t_end=1800):
+    """
+    Computes synchrony for either within-cell-type or between-cell-type comparisons.
+
+    Parameters:
+    - spike_times: List of spike train objects for each cell.
+    - cell_types: List of cell types to compute synchrony for.
+    - compare_within: Boolean to decide if comparing within each cell type or between cell types.
+    - t_start: Start time for analysis.
+    - t_end: End time for analysis.
+
+    Returns:
+    - synchrony_results: Dictionary with synchrony values for each cell type or pair of cell types.
+    """
+    synchrony_results = {}
+
+    if compare_within:
+        # Compare synchrony within each cell type
+        for cell_type, trains in spike_times.items():
+            if len(trains) > 1:  # Only compute synchrony for cell types with multiple spike trains
+                #sync_profile = spk.spike_sync_profile(get_spike_trains(trains, t_start, t_end))
+                #synchrony_results[cell_type] = {
+                #    'x': sync_profile.x,
+                #    'y': sync_profile.y
+                #}
+                sync_value = spk.spike_sync(get_spike_trains(trains, t_start, t_end))
+                synchrony_results[cell_type] = {'y': sync_value}
+
+    else:
+        # Compare synchrony between different cell types
+        cell_type_pairs = [('GC', 'MC'), ('GC', 'TC'), ('MC', 'TC')]
+        for type1, type2 in cell_type_pairs:
+            if type1 in spike_times and type2 in spike_times:
+                type1_trains = get_spike_trains(spike_times[type1], t_start, t_end)
+                type2_trains = get_spike_trains(spike_times[type2], t_start, t_end)
+                combined_trains = type1_trains + type2_trains
+                #sync_profile = spk.spike_sync_profile(combined_trains)
+                #synchrony_results[f'{type1} vs {type2}'] = {
+                #    'x': sync_profile.x,
+                #    'y': sync_profile.y
+                #}
+                sync_value = spk.spike_sync(combined_trains)
+                synchrony_results[f'{type1} vs {type2}'] = {'y': sync_value}
+
+    return synchrony_results
+
 
 def compute_and_plot_sync(groups, compare_within=False, t_start=0, t_end=1800):
+    """
+    Computes synchrony for cell groups and plots the results.
+
+    Parameters:
+    - groups: Dictionary with cell type names as keys and lists of spike trains as values.
+    - compare_within: Boolean to decide if comparing synchrony within each cell type or between cell types.
+    - t_start: Start time for analysis.
+    - t_end: End time for analysis.
+    """
+    synchrony_results = compute_synchrony(groups, cell_types=list(groups.keys()), compare_within=compare_within, t_start=t_start, t_end=t_end)
+
     plt.figure(figsize=(10, 6))
 
     # Define cell type colors
     cell_type_colors = {
         'MC': 'blue',
         'TC': 'magenta',
-        'GC': 'green'
+        'GC': 'orange'
     }
 
     if compare_within:
-        # Compare within each cell type
-        for cell_type, trains in groups.items():
-            if len(trains) > 1:  # Only compute for types with more than one spike train
-                spike_trains = get_spike_trains(trains, t_start, t_end)
-                sync_profile = spk.spike_sync_profile(spike_trains)
-                plt.plot(sync_profile.x, sync_profile.y, label=f'{cell_type} within-type sync', color=cell_type_colors[cell_type])
+        # Compare synchrony within each cell type
+        for cell_type, sync_data in synchrony_results.items():
+            plt.plot(sync_data['x'], sync_data['y'], label=f'{cell_type} within-type sync', color=cell_type_colors[cell_type])
     else:
-        # Compare between different cell types
-        cell_type_pairs = [('GC', 'MC'), ('GC', 'TC'), ('MC', 'TC')]
-        for type1, type2 in cell_type_pairs:
-            type1_trains = get_spike_trains(groups[type1], t_start, t_end)
-            type2_trains = get_spike_trains(groups[type2], t_start, t_end)
-            combined_trains = type1_trains + type2_trains
-
-            # Mix colors for type1 vs type2 comparison
-            combined_color = tuple(
-                (np.array(matplotlib.colors.to_rgb(cell_type_colors[type1])) + 
-                 np.array(matplotlib.colors.to_rgb(cell_type_colors[type2]))) / 2
-            )
-            
-            sync_profile = spk.spike_sync_profile(combined_trains)
-            plt.plot(sync_profile.x, sync_profile.y, label=f'{type1} vs {type2}', color=combined_color)
+        # Compare synchrony between different cell types
+        for pair, sync_data in synchrony_results.items():
+            plt.plot(sync_data['x'], sync_data['y'], label=f'{pair} sync')
 
     plt.xlabel("Time (ms)")
     plt.ylabel("Spike Synchrony")
@@ -94,7 +140,29 @@ def compute_and_plot_sync(groups, compare_within=False, t_start=0, t_end=1800):
     plt.show()
 
 
-def compute_frequency_synchrony(groups, freq_ranges, fs, compare_within=False, t_start=0, t_end=1800):
+
+def compute_frequency_synchrony(groups, freq_ranges, dt_ms, compare_within=False, t_start=0, t_end=1800):
+    """
+    Compute spike train synchrony across specified frequency bands.
+
+    Parameters:
+    - groups (dict): Dictionary mapping cell types (e.g., 'MC', 'GC', 'TC') to lists of spike trains.
+    - freq_ranges (list of tuples): List of frequency ranges (low, high) in Hz to analyze synchrony.
+    - fs (float): Sampling frequency in Hz.
+    - compare_within (bool, optional): If True, computes synchrony within each cell type. If False, compares across predefined cell type pairs. Default is False.
+    - t_start (float, optional): Start time for synchrony computation in ms. Default is 0.
+    - t_end (float, optional): End time for synchrony computation in ms. Default is 1800.
+
+    Returns:
+    - synchrony_results (dict): Dictionary where keys are frequency ranges (e.g., '10-20 Hz') and values are dictionaries containing synchrony values for each cell type (if `compare_within=True`) or each cell type pair (if `compare_within=False`).
+
+    Notes:
+    - Synchrony is computed using the spike-sync metric from the `spike_train` package (`spk.spike_sync`).
+    - Spike trains are bandpass filtered before analysis using `filter_spike_train`.
+    - If comparing across cell types, only predefined pairs ('GC vs MC', 'GC vs TC', 'MC vs TC') are considered.
+    """
+    fs = 1000.0 / dt_ms
+
     synchrony_results = {f'{low}-{high} Hz': {} for low, high in freq_ranges}
 
     for low, high in freq_ranges:
@@ -118,8 +186,78 @@ def compute_frequency_synchrony(groups, freq_ranges, fs, compare_within=False, t
     return synchrony_results
 
 
+def compute_and_plot_average_sync(groups, compare_within=False, t_start=0, t_end=1800):
+    """
+    Computes average synchrony for each group and plots a bar graph.
 
-def compute_spike_time_synchrony(spike_times, duration, dt, frequency_bands, fs, order=5):
+    Parameters:
+    - groups: Dictionary with cell type names as keys and lists of spike trains as values.
+    - compare_within: Boolean to decide if comparing synchrony within each cell type or between cell types.
+    - t_start: Start time for analysis.
+    - t_end: End time for analysis.
+    """
+    # Compute synchrony using the compute_synchrony function
+    synchrony_results = compute_synchrony(groups, cell_types=list(groups.keys()), compare_within=compare_within, t_start=t_start, t_end=t_end)
+
+    # Calculate average synchrony for each group
+    avg_synchrony = {}
+
+    for group, sync_data in synchrony_results.items():
+        avg_synchrony[group] = np.mean(sync_data['y'])
+
+    # Plot bar graph of average synchrony for each group
+    plt.figure(figsize=(10, 6))
+
+    # Define cell type colors
+    cell_type_colors = {
+        'MC': 'blue',
+        'TC': 'magenta',
+        'GC': 'orange'
+    }
+
+    # Use the color for the cell types or pairs in synchrony_results
+    bar_colors = [cell_type_colors.get(group.split()[0], 'gray') for group in avg_synchrony.keys()]
+
+    # Convert dictionary keys to list for plotting
+    group_names = list(avg_synchrony.keys())
+    avg_sync_values = list(avg_synchrony.values())
+
+    # Create the bar plot
+    plt.bar(group_names, avg_sync_values, color=bar_colors)
+
+    plt.xlabel("Group")
+    plt.ylabel("Average Synchrony")
+    plt.title("Average Synchrony for Each Group")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+
+
+def convert_spike_times_to_binary(spike_times, duration, dt):
+    """
+    Convert a list of spike times into a binary spike train.
+
+    Parameters:
+    spike_times (list): List of spike times (in ms).
+    duration (float): Total duration of the recording in milliseconds.
+    dt (float): Time step in milliseconds.
+
+    Returns:
+    np.array: Binary spike train (1 for a spike, 0 otherwise).
+    """
+    num_bins = int(duration / dt)  # Total number of time bins
+    binary_train = np.zeros(num_bins)  # Initialize with zeros
+
+    for t in spike_times:
+        bin_idx = int(t / dt)  # Convert time to index
+        if bin_idx < num_bins:
+            binary_train[bin_idx] = 1  # Mark spike occurrence
+
+    return binary_train
+
+
+def compute_spike_time_synchrony(spike_times, duration, dt_ms, frequency_bands, order=5):
     """
     Calculate spike-time synchrony across different frequency bands.
 
@@ -134,7 +272,10 @@ def compute_spike_time_synchrony(spike_times, duration, dt, frequency_bands, fs,
     Returns:
     synchrony_dict (dict): Synchrony values for each pair of spike trains across frequency bands.
     synchrony_avg (dict): Average synchrony for each frequency band.
+    
     """
+    fs = 1000.0 / dt_ms
+    
     # Convert spike times to binary spike trains
     spike_trains = [convert_spike_times_to_binary(times, duration, dt) for _, times in spike_times]
     
@@ -239,10 +380,10 @@ def plot_frequency_synchrony(synchrony_results):
     plt.show()
 
 
-
 def calculate_means_and_stds(synchrony_results):
     """Calculate means and standard deviations for synchrony results."""
     means = {}
+    stds = {}
     
     for freq_range, sync_values in synchrony_results.items():
         for label, sync_value in sync_values.items():
@@ -250,11 +391,27 @@ def calculate_means_and_stds(synchrony_results):
                 means[label] = []
             means[label].append(sync_value)  # Collect sync values directly
 
-    # Convert lists to means
+    # Convert lists to means and standard deviations
     for label in means.keys():
-        means[label] = np.mean(means[label])  # Average of single values
+        means[label] = np.mean(means[label])  
+        stds[label] = np.std(means[label])  
 
-    return means
+    return means, stds
+
+
+def plot_synchrony_bars(means, stds):
+    """Plot bar graphs of synchrony means with error bars."""
+    labels = list(means.keys())
+    values = list(means.values())
+    errors = [stds[label] for label in labels]
+
+    plt.figure(figsize=(8, 5))
+    plt.bar(labels, values, yerr=errors, capsize=5, color='steelblue', alpha=0.7)
+    plt.ylabel("Synchrony")
+    plt.title("Mean Synchrony with Standard Deviation")
+    plt.xticks(rotation=45)  # Keep text readable if labels are long
+    plt.grid(axis='y', linestyle='--', alpha=0.5)
+    plt.show()
 
 
 
