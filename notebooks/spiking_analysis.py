@@ -109,22 +109,22 @@ def plot_proportion_spiking(proportions):
 
 
 
-def get_firing_rates(spike_times, dt):
+from collections import defaultdict
+import numpy as np
+
+def get_individual_firing_rates(spike_times, dt):
     """
-    Computes the firing rates for individual cells and for each cell type.
+    Computes the firing rates for individual cells.
 
     Parameters:
     spike_times (list of tuples): Each tuple contains a cell identifier and a list of spike times.
     dt (float): Time step in milliseconds.
 
     Returns:
-    dict: Firing rates for each individual cell (Hz).
-    dict: Firing rates (Hz) for each cell type.
+    dict: Firing rates for individual cells (Hz).
     """
     assert dt > 0, "dt must be a positive value."
 
-    spike_counts = defaultdict(int)
-    cell_type_counts = defaultdict(int)
     cell_firing_rates = {}
 
     # Find the total duration of the simulation
@@ -139,45 +139,94 @@ def get_firing_rates(spike_times, dt):
     for seg, times in spike_times:
         assert isinstance(times, list), f"Spike times for {seg} should be a list."
         
-        cell_type = seg[:3]  # Extracts GC, MC, or TC
-        cell_type_counts[cell_type] += 1
-        spike_counts[cell_type] += len(times)
-
         # Compute firing rate for individual cells
         firing_rate = len(times) / total_time_s if total_time_s > 0 else 0
         cell_firing_rates[seg] = firing_rate  # Store per-cell firing rate
 
-    # Compute overall firing rate per cell type
+    return cell_firing_rates
+
+
+def get_cell_type_firing_rates(spike_times, dt, if_population=False):
+    """
+    Computes the firing rates for each cell type (group).
+
+    Parameters:
+    spike_times (list of tuples): Each tuple contains a cell identifier and a list of spike times.
+    dt (float): Time step in milliseconds.
+    if_population (bool): If True, computes total population firing rate (spikes / total time).
+                          If False, computes average firing rate per cell.
+
+    Returns:
+    dict: Firing rates for each cell type (Hz).
+    """
+    assert dt > 0, "dt must be a positive value."
+
+    spike_counts = defaultdict(int)
+    cell_type_counts = defaultdict(int)
     cell_type_firing_rates = {}
-    for cell_type in cell_type_counts:
-        total_cells = cell_type_counts[cell_type]
+
+    # Find the total duration of the simulation
+    all_spike_times = [time for _, times in spike_times for time in times]
+    total_time_ms = max(all_spike_times) if all_spike_times else 1  # Prevent division by zero
+    total_time_s = total_time_ms / 1000  # Convert ms to seconds
+
+    for seg, times in spike_times:
+        assert isinstance(times, list), f"Spike times for {seg} should be a list."
+        
+        cell_type = seg[:3]  # Extracts GC, MC, or TC
+        cell_type_counts[cell_type] += 1
+        spike_counts[cell_type] += len(times)
+
+    # Compute firing rate per cell type
+    for cell_type in spike_counts:
         total_spikes = spike_counts[cell_type]
-        firing_rate = total_spikes / (total_cells * total_time_s) if total_cells > 0 else 0
+        total_cells = cell_type_counts[cell_type]
+
+        if if_population:
+            # Compute total population firing rate (spikes / total time)
+            firing_rate = total_spikes / total_time_s if total_time_s > 0 else 0
+        else:
+            # Compute average firing rate per cell (spikes / (num cells * total time))
+            firing_rate = total_spikes / (total_cells * total_time_s) if total_cells > 0 else 0
+        
         cell_type_firing_rates[cell_type] = firing_rate
 
-    return cell_firing_rates, cell_type_firing_rates
+    return cell_type_firing_rates
 
 
-def plot_firing_rates(firing_rates):
-
+def plot_firing_rates(firing_rates, full_cell_type=True):
     """
-    Plots a bar chart for the given data with specific colors using matplotlib.
-    
+    Plots a bar chart for the given firing rates with specific colors.
+
     Parameters:
-    data (dict): Dictionary where keys are cell names and values are numeric values.
+    firing_rates (dict): Dictionary where keys are cell names and values are spike rates.
+    full_cell_type (bool): If True, plot individual cell types; if False, group by MC, TC, GC.
     """
     
-    colors = []
-    for cell in firing_rates.keys():
-        if 'TC' in cell:
-            colors.append('magenta')
-        elif 'MC' in cell:
-            colors.append('blue')
-        elif 'GC' in cell:
-            colors.append('orange')
+    if full_cell_type:
+        # Sort keys to ensure MCs appear first, then TCs, then GCs
+        sorted_cells = sorted(firing_rates.keys(), key=lambda x: ('MC' not in x, 'TC' not in x, x))
+        labels = sorted_cells
+        values = [firing_rates[cell] for cell in labels]
+        colors = ['blue' if 'MC' in cell else 'magenta' if 'TC' in cell else 'orange' for cell in labels]
     
+    else:
+        # Group by broad categories and compute the average
+        grouped_rates = {'MC': [], 'TC': [], 'GC': []}
+        for cell, rate in firing_rates.items():
+            if 'MC' in cell:
+                grouped_rates['MC'].append(rate)
+            elif 'TC' in cell:
+                grouped_rates['TC'].append(rate)
+            elif 'GC' in cell:
+                grouped_rates['GC'].append(rate)
+        
+        labels = ['MC', 'TC', 'GC']  # Explicit order
+        values = [np.mean(grouped_rates[cell]) for cell in labels]
+        colors = ['blue', 'magenta', 'orange']
+
     plt.figure(figsize=(8, 5))
-    plt.bar(firing_rates.keys(), firing_rates.values(), color=colors)
+    plt.bar(labels, values, color=colors)
     plt.xlabel("Cell Type")
     plt.ylabel("Spike Rate (Hz)")
     plt.title("Spike Rates by Cell Type")
@@ -185,7 +234,7 @@ def plot_firing_rates(firing_rates):
     plt.show()
 
 
-def plot_spikes(vs, spike_times):
+def plot_spikes_delete(vs, spike_times):
     fig_width = 27
 
     fig, ax = plt.subplots(2, 1, figsize=(fig_width,len(vs)*0.2))
@@ -281,22 +330,20 @@ def plot_spikes_dots(spike_times):
     plt.show()
 
 
-def plot_spikes_dots_condensed(spike_times):
-
-    # Calculate the number of non-empty spike times to adjust figure height
-    num_cells = sum(1 for _, times in spike_times if times)
+def plot_spikes_raster(spike_times, ax):
+    """
+    Plots spike times as dots, skipping neurons that don't spike.
     
-    # Set fig_height based on the number of non-empty spike times and desired spacing
-    fig_width = 27
-    fig_height = num_cells * 0.3  # Adjust this factor to decrease/increase vertical spacing
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-
+    Parameters:
+    ax - Matplotlib axis to plot on
+    spike_times - List of tuples (neuron label, spike times)
+    """
     cell_type_positions = defaultdict(list)
     cell_type_colors = {}
 
-    i = 0
+    i = 0  # Track only spiking neurons
     for seg, times in spike_times:
-        if not times:  # Skip if no spike times
+        if not times:  # Skip neurons with no spikes
             continue
 
         if 'MC' in seg:
@@ -310,29 +357,23 @@ def plot_spikes_dots_condensed(spike_times):
 
         cell_type = seg[:3]
         cell_type_colors[cell_type] = col
-        i += 1
-        ax.plot(times, [i] * len(times), color=col, marker='.', ms=10, linestyle='None')
+        ax.plot(times, [i] * len(times), color=col, marker='.', ms=15, linestyle='None')
         cell_type_positions[cell_type].append(i)
+        i += 1  # Increment only for spiking neurons
 
-    ax.set_xlabel('Simulation Time [ms]', fontsize=24)
-    #ax.set_ylabel('Neurons', fontsize=18)  # Uncomment if you want to add the y-axis label
-    ax.set_yticks([])
-
-    # Set x-axis tick label font size
-    ax.tick_params(axis='x', labelsize=24)
+    ax.set_xlabel('Simulation Time [ms]', fontsize=14)
+    ax.set_yticks([])  # Remove y-tick labels
 
     # Add custom y-axis labels with larger font size
     for cell_type, positions in cell_type_positions.items():
         mid_pos = np.mean(positions)
-        ax.text(-0.1, mid_pos, cell_type, ha='center', va='center', fontsize=24, transform=ax.get_yaxis_transform())
+        ax.text(-0.1, mid_pos, cell_type, ha='center', va='center', fontsize=22, transform=ax.get_yaxis_transform())
 
         # Draw colored vertical lines
         col = cell_type_colors[cell_type]
         ax.plot([-0.05, -0.02], [positions[0], positions[0]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
         ax.plot([-0.05, -0.02], [positions[-1], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
         ax.plot([-0.05, -0.05], [positions[0], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
-
-    plt.show()
 
 
 def extract_spike_times_by_cell_type(spike_times, cell_types):
@@ -355,6 +396,7 @@ def extract_spike_times_by_cell_type(spike_times, cell_types):
                 break
     
     return cell_type_spike_times
+
 
     
 def get_spikes_hist(spiking_cells, spike_times_clean, cell_type, bin_edges=None):
@@ -380,8 +422,8 @@ def get_spikes_hist(spiking_cells, spike_times_clean, cell_type, bin_edges=None)
     return bincenters, rates
 
 
-def plot_spikes_hist(ax, bincenters, rates, col='b'):
-    ax.plot(bincenters, rates, color=col)
+def plot_spikes_hist(ax, bincenters, rates, col, linewidth):
+    ax.plot(bincenters, rates, color=col, linewidth=linewidth)
     ax.set_xlabel('Simulation Time [ms]', fontsize=18)
     ax.set_ylabel('Rate', fontsize=18)
 
@@ -399,21 +441,6 @@ def get_spikes_hist2(spiking_cells, spike_times_clean, cell_type, bins=50):
             rates = y/binsize  # scale y values
     return bincenters, rates
 
-
-
-def plot_spikes_hist_(bincenters, rates, col='b'):
-
-    bincenters, rates = get_spikes_hist(cell_name)
-
-    fig, ax = plt.subplots(1, 1, figsize=(27,6))
-
-    ax.plot(bincenters, rates, color=col)
-    #ax.set_xlim(0, 50)
-    #ax.set_ylim(0, 60)
-    ax.set_xlabel('time (s)')
-    ax.set_ylabel('Rate')
-
-    plt.show()
 
 
 def calculate_sta(spike_times, lfp, win=50, dt=0.1):
