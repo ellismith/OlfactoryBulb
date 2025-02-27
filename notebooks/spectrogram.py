@@ -124,8 +124,8 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, vmin=N
     plt.show()
 
 
-def compute_sniff_average(params_dict, t, lfp, dt_ms, wavelet):
-    cfs, frequencies, lfp_wavelet_power  = compute_wavelet_transform(lfp, dt_ms, num_scales=50, wavelet=wavelet, lowcut=None, highcut=None, \
+def compute_sniff_average(params_dict, t, lfp, dt_ms, wavelet, lowcut, highcut):
+    cfs, frequencies, lfp_wavelet_power  = compute_wavelet_transform(lfp, dt_ms, num_scales=50, wavelet=wavelet, lowcut=lowcut, highcut=highcut, \
                                 scale_low=10, scale_high=2000, bp_order=6, logscales=False)
         
 
@@ -151,7 +151,7 @@ def compute_sniff_average(params_dict, t, lfp, dt_ms, wavelet):
     return t_average, frequencies, lfp_wavelet_power_average
 
 
-def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, vmax):
+def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, wavelet, paramset, vmax):
     """
     Plot the average sniff wavelet power as a contour plot with a colorbar.
     
@@ -180,11 +180,11 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, vmax):
     )
 
     plt.xlim((0, 200))
-    plt.ylim((20, 180))
+    plt.ylim((20, 200))
 
     plt.ylabel('Frequency [Hz]', fontsize=14)
     plt.xlabel('Time Since Sniff Onset [ms]', fontsize=14)
-
+    
     plt.xticks(
         np.arange(round(min(t_average)), max(t_average) + 1, 50.0)[:-1], 
         fontsize=14
@@ -199,7 +199,7 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, vmax):
     cbar.formatter = tkr.FormatStrFormatter('%.2f')
     cbar.update_ticks()
 
-    plt.title("Sniff Averaged LFP Wavelet Power", fontsize=14)
+    plt.title(f'Sniff Average LFP Power for {wavelet} Wavelet, Paramset: {paramset}', fontsize=14)
 
     plt.show()
 
