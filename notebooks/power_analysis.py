@@ -43,10 +43,13 @@ def get_power_spectr(t, lfp, dt, f_min=0, f_max=50, color='r'):
     plt.show()
 
 
-def calculate_dominant_frequency_power(signal, dt_ms, freq_range=(15, 200)):
+def calculate_psd_and_dominant_frequency(signal, dt_ms, freq_range=(15, 200), nperseg=1024):
     """
-    Compute the power spectral density and dominant frequency in a given range.
-    
+    Compute the power spectral density and dominant frequency in a given range 
+    - calculate_dominant_frequency_power uses Welch’s method (scipy.signal.welch) to compute the PSD
+    - It calculates power at different frequencies and identifies the dominant frequency (i.e., the frequency with the highest power).
+    - It filters the frequencies within a specific range (15-200 Hz by default)
+
     Parameters:
     - signal: 1D NumPy array, input signal.
     - dt_ms: Time step in milliseconds.
@@ -59,7 +62,6 @@ def calculate_dominant_frequency_power(signal, dt_ms, freq_range=(15, 200)):
     - dom_power: Power at the dominant frequency.
     """
     fs = 1000.0 / dt_ms  # Convert dt from ms to Hz
-    nperseg = min(len(signal) // 2, 1024)  # Ensures good frequency resolution
     
     # Compute power spectral density using Welch's method
     freqs, psd = welch(signal, fs=fs, nperseg=nperseg, noverlap=nperseg//2)
@@ -75,6 +77,29 @@ def calculate_dominant_frequency_power(signal, dt_ms, freq_range=(15, 200)):
     dom_power = psd_filtered[dom_freq_idx]
 
     return freqs_filtered, psd_filtered, dom_freq, dom_power
+
+
+def calculate_fft_spectrum(signal, dt_ms, freq_range=(15, 200)):
+    dt_secs = dt_ms / 1000.0
+    n = len(signal)
+    fs = 1.0 / dt_secs  # Sampling frequency
+
+    freqs = np.fft.rfftfreq(n, d=dt_secs)
+    fft_magnitude = np.abs(np.fft.rfft(signal))
+
+    # Normalize FFT power to match Welch’s power spectral density
+    fft_power = (fft_magnitude ** 2) / (n * fs)
+
+    valid_idx = np.logical_and(freqs >= freq_range[0], freqs <= freq_range[1])
+    freqs_filtered = freqs[valid_idx]
+    fft_power_filtered = fft_power[valid_idx]
+
+    dom_freq_idx = np.argmax(fft_power_filtered)
+    dom_freq = freqs_filtered[dom_freq_idx]
+    dom_power = fft_power_filtered[dom_freq_idx]
+
+    return freqs_filtered, fft_power_filtered, dom_freq, dom_power
+
 
 
 def plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers, labels=None, colors=None):
