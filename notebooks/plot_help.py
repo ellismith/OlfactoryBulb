@@ -8,6 +8,7 @@ import json
 from load import *
 from spectrogram import *
 from wavelet import *
+from spiking_analysis import *
 
 def mix_colors(color1, color2):
     """
@@ -25,7 +26,7 @@ def mix_colors(color1, color2):
     return mcolors.to_hex((c1 + c2) / 2)
 
 
-def get_toy_data(f1=28, f2=70, f3=150, dt=0.1, duration=2000):
+def get_toy_data(f1=28, f2=70, f3=100, dt=0.1, duration=2000):
     '''
     f1: low frequency component (Hz)
     f2: middle frequency component (Hz)
@@ -219,91 +220,7 @@ def show_subplot(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
     plot_scalogram(t_lfp, frequencies, lfp_wavelet_power, fig_dir, params_filename=params_filename, params_title=params_filename)
 
 
-
-def show_subplot2(paramset, params_short=True):
-    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-
-    fig_width = 27
-    events, vs, spike_times, t, lfp, lfp_bp_low, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
-        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
-    
-    if 'dt' in params_dict:
-        dt = params_dict['dt']
-    else:
-        dt = 0.1
-
-    params_list, params_filename = get_params(paramset)
-
-    if params_short:
-        params_title = params_filename
-    else:
-        params_title = params_list
-
-    # Adjust height ratios
-    fig, ax = plt.subplots(4, 1, gridspec_kw={'height_ratios': [12, 1, 1, 1]}, figsize=(fig_width, len(vs) * 0.12 + 5 * 3))
-
-    i = 0
-
-    for cell, t, v in vs:
-        if 'TC' in cell:
-            col = 'magenta'
-            #print(cell)
-            
-        elif 'MC' in cell:
-            col = 'blue'
-            #print(cell)
-           
-        elif 'GC' in cell:
-            #col = 'orange'
-            continue  # don't plot GCs
-
-        ax[0].plot(t, np.array(v) + i, col, label=cell)
-        i += 100
-
-    events = [(seg, times) for seg, times in events.items()]
-    events.sort(key=lambda row: row[0])
-
-    for seg, times in events:
-        col = 'b' if 'MC' in seg else 'm' if 'TC' in seg else 'k'
-        ax[0].plot(times, [i] * len(times), col + '|', ms=5, label=seg)
-        i += 10
-
-    ax[0].set_xticks(np.arange(min(t), max(t) + 1, 50.0))
-    ax[0].tick_params(labelsize=12)
-    ax[0].margins(0)
-    ax[0].set_yticks([])
-    ax[0].spines['top'].set_visible(False)
-    ax[0].spines['right'].set_visible(False)
-    ax[0].spines['left'].set_visible(False)
-    ax[0].set_xlabel('Simulation Time [ms]', fontsize=18)
-
-    
-    spiking_cells, spike_times_clean = get_spiking_cells(spike_times)
-    # Set a common bin range
-    bin_edges = np.arange(0, 1800, 50)
-
-    # TC spikes
-    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'TC', bin_edges=bin_edges)
-    ax[1].set_xticks(np.arange(0, 1800, 50.0))
-    plot_spikes_hist(ax[1], bincenters, rates, 'magenta')
-
-    # MC spikes
-    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'MC', bin_edges=bin_edges)
-    plot_spikes_hist(ax[2], bincenters, rates, 'blue')
-    ax[2].set_xticks(np.arange(0, 1800, 50.0))
-
-    # GC spikes
-    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'GC', bin_edges=bin_edges)
-    plot_spikes_hist(ax[3], bincenters, rates, 'green')
-    ax[3].set_xticks(np.arange(0, 1800, 50.0))
-
-    plt.tight_layout()
-    plt.savefig(f'{fig_dir}/spikes_hist_{params_filename}.jpg', bbox_inches='tight', dpi=300)
-    
-    plt.show()
-
-
-def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1024, lowcut=30, highcut=80, order=5):
+def subplots_mctc_activity(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1024, lowcut=30, highcut=80, order=5):
     """
     Visualizes spike data, LFP signals, FFT, and the average STFT across sniffs.
     
@@ -368,7 +285,7 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1
     min_t = min(t)
     max_t = max(t)
 
-    ax[0].set_xticks(np.arange(min_t, max_t + 1, 50.0))
+    ax[0].set_xticks(np.arange(min_t, max_t, 50.0))
     ax[0].tick_params(labelsize=12)
     ax[0].margins(0)
     ax[0].set_yticks([])
@@ -381,34 +298,86 @@ def show_subplot3(paramset, params_short=True, lfp_pkl_file='lfp.pkl', nperseg=1
     #t = t_lfp
 
     ax[1].margins(0)
+    t = t[:len(lfp)] # chop the extra 2 samples off t (?) 
     ax[1].plot(t, lfp * 10000 + 200, label='raw', color='black')
-    ax[1].plot(t, lfp_bp_low * 10000 - 7000, label='BP filtered: low', color='purple')
-    ax[1].plot(t, lfp_bp_gamma * 10000 - 10000, label='BP filtered: gamma', color='orange')
-    ax[1].plot(t, lfp_bp_hfo * 10000 - 13000, label='BP filtered: HFO', color='green')
+    ax[1].plot(t, lfp_bp_beta * 10000 - 7000, label='BP filtered: beta', color='blue')
+    ax[1].plot(t, lfp_bp_gamma * 10000 - 10000, label='BP filtered: gamma', color='green')
+    ax[1].plot(t, lfp_bp_hfo * 10000 - 13000, label='BP filtered: HFO', color='red')
 
-    ax[1].set_xticks(np.arange(min_t, max_t + 1, 50.0))
-    ax[1].tick_params(labelsize=12)
+    ax[1].set_xticks(np.arange(min_t, max_t, 50.0))
+    ax[1].tick_params(labelsize=14)
     ax[1].set_yticks([])
     ax[1].spines['top'].set_visible(False)
     ax[1].spines['right'].set_visible(False)
     ax[1].spines['left'].set_visible(False)
     ax[1].set_xlabel('Simulation Time [ms]', fontsize=18)
-    ax[1].legend(loc=(0.9, 0.27))
+    ax[1].legend(loc=(0.9, 0.27), fontsize=14)
     ax[1].set_xlim(min_t, max_t)
 
-    # Create a new figure for the spectrogram plot separately
-    fig_spectr, ax_spectr = plt.subplots(figsize=(6, 6), constrained_layout=True)
-    
-    fs = 1 / (params_dict['dt'] * 1e-3)
-    t_wavelet, frequencies, wavelet_power = compute_wavelet_transform(lfp, dt, num_scales=50, wavelet="cgau5", scale_low=3, scale_high=200, normalize=False)
-    plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir)
-    plot_spectrogram(ax_spectr, f, t, wavelet_power, order, vmin=None, cmap_name='jet')
-    ax_spectr.set_title('Average LFP power (wavlelet transform) Across Sniffs', fontsize=16)
-    
     # Save both figures
     #plt.savefig(f'{fig_dir}/spikes_spectrogram_{params_filename}.jpg', dpi=300)
     #fig_stft.savefig(f'{fig_dir}/sniff_average_stft_{params_filename}.jpg', dpi=300)
     
+    plt.show()
+
+
+
+
+def subplots_spikes(paramset, params_short=True):
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+
+    fig_width = 27
+    events, vs, spike_times, t, lfp, lfp_bp_low, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+    
+    if 'dt' in params_dict:
+        dt = params_dict['dt']
+    else:
+        dt = 0.1
+
+    params_list, params_filename = get_params(paramset)
+
+    if params_short:
+        params_title = params_filename
+    else:
+        params_title = params_list
+
+    # Adjust height ratios
+    fig, ax = plt.subplots(4, 1, gridspec_kw={'height_ratios': [8, 1, 1, 1]}, figsize=(fig_width, len(vs) * 0.12 + 5 * 3))
+
+    min_t = min(t)
+    max_t = max(t)
+
+    plot_spikes_raster(spike_times, ax[0])  # Pass ax[0] to plot spikes
+    ax[0].set_xlim(min_t, max_t)  # Ensure time axis matches histograms
+
+    spiking_cells, spike_times_clean = get_spiking_cells(spike_times)
+    bin_edges = np.arange(min_t, max_t, 50)  # Adjusted bin range
+
+    # TC spikes
+    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'TC', bin_edges=bin_edges)
+    ax[1].set_xticks(np.arange(min_t, max_t, 50.0))
+    ax[1].set_title('TC Spike Histogram', fontsize=16)
+    plot_spikes_hist(ax[1], bincenters, rates, col='magenta', linewidth=2)
+
+    # MC spikes
+    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'MC', bin_edges=bin_edges)
+    ax[2].set_xticks(np.arange(min_t, max_t, 50.0))
+    ax[2].set_title('MC Spike Histogram', fontsize=16)
+    plot_spikes_hist(ax[2], bincenters, rates, col='blue', linewidth=2)
+
+    # GC spikes
+    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'GC', bin_edges=bin_edges)
+    ax[3].set_xticks(np.arange(min_t, max_t, 50.0))
+    ax[3].set_title('GC Spike Histogram', fontsize=16)
+    plot_spikes_hist(ax[3], bincenters, rates, col='orange', linewidth=2)
+
+    ax[3].set_xlabel('Simulation Time [ms]', fontsize=18)
+    ax[1].set_xlim(min_t, max_t)  # Align x-axis for consistency
+    ax[2].set_xlim(min_t, max_t)  # Align x-axis for consistency
+    ax[3].set_xlim(min_t, max_t)  # Align x-axis for consistency
+
+    plt.tight_layout()
     plt.show()
 
 
