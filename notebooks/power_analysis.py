@@ -11,14 +11,70 @@ import os
 import yaml
 from pylab import * 
 from scipy import signal
-from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
+from scipy.signal import welch
 #from scipy.signal import ShortTimeFFT
-
 import matplotlib.ticker as tkr
 from plot_help import mix_colors
 
 
 ############### POWER ANALYSIS #################
+
+def get_power_spectr(t, lfp, dt, f_min=0, f_max=50, color='r'):
+    # dt: ms
+    # Compute the FFT of the signal
+    fft_vals = np.fft.rfft(lfp)
+    
+    # Ensure dt is properly handled (if dt is in Hz, time step is 1/dt)
+    dt_in_sec = dt * 0.001
+    freqs = np.fft.rfftfreq(len(lfp), d=dt_in_sec)
+
+    # Normalize the FFT for proper scaling
+    power_spectrum = np.abs(fft_vals) / len(lfp)
+
+    # Plot the power spectrum
+    plt.figure(figsize=(8, 4))
+    plt.plot(freqs, power_spectrum, color=color, linewidth=1.2)
+    plt.xlabel("Frequency (Hz)")
+    plt.ylabel("Magnitude")
+    plt.title("Power Spectrum of the LFP Signal")
+    plt.xlim(f_min, f_max)  # Focus on the frequency range of interest
+    plt.grid(True)
+
+    plt.show()
+
+
+def plot_dominant_frequency_power(signal, dt_ms):
+    """
+    Compute and plot the power of the dominant frequency in a signal.
+    
+    Parameters:
+    - signal: The input signal (1D array).
+    - dt_ms
+    """
+    fs = 1000.0 / dt_ms
+
+    # Compute power spectral density using Welch's method
+    freqs, psd = welch(signal, fs=fs, nperseg=len(signal) // 2)
+
+    # Find dominant frequency
+    dom_freq_idx = np.argmax(psd)
+    dom_freq = freqs[dom_freq_idx]
+    dom_power = psd[dom_freq_idx]
+
+    # Plot Power Spectrum
+    plt.figure(figsize=(8, 4))
+    plt.plot(freqs, psd, label="Power Spectrum")
+    plt.axvline(dom_freq, color='r', linestyle='--', label=f'Dom. Freq: {dom_freq:.2f} Hz')
+    plt.scatter([dom_freq], [dom_power], color='red', zorder=3)
+    plt.xlabel("Frequency (Hz)")
+    plt.xlim(0,200)
+    plt.ylabel("Power")
+    plt.title("Power Spectrum and Dominant Frequency")
+    plt.legend()
+    plt.show()
+
+    return dom_freq, dom_power
+
 
 def get_psd(paramset):
 
