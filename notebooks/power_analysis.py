@@ -43,55 +43,70 @@ def get_power_spectr(t, lfp, dt, f_min=0, f_max=50, color='r'):
     plt.show()
 
 
-def plot_dominant_frequency_power(signal, dt_ms):
+def calculate_dominant_frequency_power(signal, dt_ms, freq_range=(15, 200)):
     """
-    Compute and plot the power of the dominant frequency in a signal.
+    Compute the power spectral density and dominant frequency in a given range.
     
     Parameters:
-    - signal: The input signal (1D array).
-    - dt_ms
+    - signal: 1D NumPy array, input signal.
+    - dt_ms: Time step in milliseconds.
+    - freq_range: Tuple (low, high) specifying the frequency range to analyze.
+
+    Returns:
+    - freqs_filtered: Frequencies within the specified range.
+    - psd_filtered: Power spectral density within the range.
+    - dom_freq: Dominant frequency within the range.
+    - dom_power: Power at the dominant frequency.
     """
-    fs = 1000.0 / dt_ms
-
+    fs = 1000.0 / dt_ms  # Convert dt from ms to Hz
+    nperseg = min(len(signal) // 2, 1024)  # Ensures good frequency resolution
+    
     # Compute power spectral density using Welch's method
-    freqs, psd = welch(signal, fs=fs, nperseg=len(signal) // 2)
+    freqs, psd = welch(signal, fs=fs, nperseg=nperseg, noverlap=nperseg//2)
 
-    # Find dominant frequency
-    dom_freq_idx = np.argmax(psd)
-    dom_freq = freqs[dom_freq_idx]
-    dom_power = psd[dom_freq_idx]
+    # Extract only the desired frequency range
+    valid_idx = np.logical_and(freqs >= freq_range[0], freqs <= freq_range[1])
+    freqs_filtered = freqs[valid_idx]
+    psd_filtered = psd[valid_idx]
 
-    # Plot Power Spectrum
+    # Find dominant frequency in the filtered range
+    dom_freq_idx = np.argmax(psd_filtered)
+    dom_freq = freqs_filtered[dom_freq_idx]
+    dom_power = psd_filtered[dom_freq_idx]
+
+    return freqs_filtered, psd_filtered, dom_freq, dom_power
+
+
+def plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers, labels=None, colors=None):
+    """
+    Plot power spectral densities for multiple signals with different colors and 
+    mark dominant frequencies with vertical lines.
+    
+    Parameters:
+    - freqs_list: List of frequency arrays.
+    - psd_list: List of corresponding power spectral densities.
+    - dom_freqs: List of dominant frequencies for each signal.
+    - dom_powers: List of power values at dominant frequencies.
+    - labels: List of labels for each spectrum.
+    - colors: List of colors for each spectrum.
+    """
     plt.figure(figsize=(8, 4))
-    plt.plot(freqs, psd, label="Power Spectrum")
-    plt.axvline(dom_freq, color='r', linestyle='--', label=f'Dom. Freq: {dom_freq:.2f} Hz')
-    plt.scatter([dom_freq], [dom_power], color='red', zorder=3)
+    
+    if labels is None:
+        labels = [f"Signal {i+1}" for i in range(len(freqs_list))]
+    if colors is None:
+        colors = plt.cm.viridis(np.linspace(0, 1, len(freqs_list)))  # Default color map
+
+    for freqs, psd, dom_freq, dom_power, label, color in zip(freqs_list, psd_list, dom_freqs, dom_powers, labels, colors):
+        plt.plot(freqs, psd, label=label, color=color)
+        #plt.axvline(dom_freq, color=color, linestyle="--", alpha=0.7)  # Vertical line for dominant frequency
+        #plt.scatter([dom_freq], [dom_power], color=color, edgecolor='black', zorder=3)  # Highlight peak
+
     plt.xlabel("Frequency (Hz)")
-    plt.xlim(0,200)
     plt.ylabel("Power")
-    plt.title("Power Spectrum and Dominant Frequency")
+    plt.title("Power Spectrum (15-200 Hz)")
     plt.legend()
     plt.show()
-
-    return dom_freq, dom_power
-
-
-def get_psd(paramset):
-
-    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
-        params_dict = yaml.load(f, Loader=yaml.FullLoader)
-
-    dt = params_dict['dt']    # in ms
-    dt_in_sec = dt*0.001      # dt in ms to seconds
-
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, \
-        lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)    
-
-    f, psd = signal.welch(lfp, fs=1/dt_in_sec, nperseg=nperseg)
-
-    return f, psd
 
 
 def get_csd(f, psd):
