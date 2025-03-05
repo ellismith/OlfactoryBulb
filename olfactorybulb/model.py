@@ -176,7 +176,7 @@ class OlfactoryBulb:
                                                                                     #        'GC1[12].apic[2]',  'GC5[226].apic[0]',  'GC3[126].apic[8]',  \
                                                                                     #            'GC3[150].apic[1]',  'GC3[34].apic[3]',  'GC3[100].apic[0]',  \
                                                                                     #                'GC3[24].apic[9]',  'GC3[154].apic[7]',  'GC3[78].apic[3]',  \
-                                                                                    #                    'GC1[202].apic[7]',  'GC1[146].apic[8]',  'GC5[188].apic[7]', \
+                                                                                    ##                    'GC1[202].apic[7]',  'GC1[146].apic[8]',  'GC5[188].apic[7]', \
                                                                                     #                          'GC3[242].apic[2]',  'GC3[236].apic[2]',  'GC3[94].apic[5]', \
                                                                                     #                              'GC3[166].apic[4]',  'GC3[50].apic[8]',  'GC3[188].apic[2]',  \
                                                                                     #                                'GC1[26].apic[8]',  'GC5[12].apic[6]',  'GC3[180].apic[1]',  \
@@ -185,9 +185,9 @@ class OlfactoryBulb:
                                                                                     #                                              'GC3[28].apic[2]',  'GC5[146].apic[0]',  'GC5[192].apic[3]', \
                                                                                     #                                                  'GC1[204].apic[8]',  'GC3[96].apic[8]',  'GC1[32].apic[2]', \
                                                                                     #                                                      'GC3[98].apic[7]',  'GC3[92].apic[8]',  'GC3[54].apic[3]',  \
-                                                                                   #                                                         'GC3[182].apic[2]',  'GC3[68].apic[8]',  'GC3[188].apic[7]', \
-                                                                                   #                                                               'GC5[212].apic[5]',  'GC3[178].apic[7]',  'GC1[26].apic[4]',\
-                                                                                   #                                                                   'GC1[142].apic[8]',  'GC5[192].apic[4]'] #100
+                                                                                    #                                                        'GC3[182].apic[2]',  'GC3[68].apic[8]',  'GC3[188].apic[7]', \
+                                                                                    #                                                             'GC5[212].apic[5]',  'GC3[178].apic[7]',  'GC1[26].apic[4]',\
+                                                                                    #                                                                  'GC1[142].apic[8]',  'GC5[192].apic[4]'] #100
                                         
         print("len(centrif_inputsegs):", len(centrif_inputsegs))
     
@@ -199,7 +199,7 @@ class OlfactoryBulb:
             self.add_inputs(odor=odor_info["name"], t=time, rel_conc=odor_info["rel_conc"])
             print("between add_inputs and add_centrif")
         
-        self.add_centrifugal_inputs(centrif_inputsegs=centrif_inputsegs, t=params.sim_setup_time)
+        self.add_centrifugal_inputs(centrif_inputsegs=centrif_inputsegs, t=40)
         
         
         # LFP
@@ -798,6 +798,56 @@ class OlfactoryBulb:
         return times
     
     
+    def get_sinusoidal_spike_train(self, start_time, duration, base_frequency, mod_frequency, amplitude, jitter, phase_offset=0.0):
+        """
+        Generates a spike train with a constant inter-spike interval, with sinusoidal modulation in time.
+
+        :param start_time: The onset time of the spike train (in ms)
+        :param duration: The duration for which spikes will be generated (in ms)
+        :param base_frequency: The base firing rate (spikes per second)
+        :param mod_frequency: The frequency of sinusoidal modulation (in Hz)
+        :param amplitude: The amplitude of the modulation (in ms)
+        :param jitter: The maximum amount of random jitter added to each spike time (in ms)
+        :param phase_offset: The phase offset for the sinusoidal modulation (in radians)
+        :return: A numpy array of spike times in chronological order
+        """
+
+        # Calculate the inter-spike interval (constant)
+        inter_spike_interval = 1000.0 / base_frequency
+        
+        # Generate initial spike times with constant intervals
+        num_spikes = int(np.floor(duration / inter_spike_interval))
+        spike_times = np.arange(start_time, start_time + num_spikes * inter_spike_interval, inter_spike_interval)
+        
+        # Apply sinusoidal modulation to spike times with phase offset
+        modulated_spike_times = spike_times + amplitude * np.sin(2 * np.pi * mod_frequency * spike_times / 1000.0 + phase_offset)
+        
+        # Apply jitter if specified
+        if jitter > 0:
+            modulated_spike_times += np.random.uniform(-jitter, jitter, size=modulated_spike_times.shape)
+        
+        # Return sorted spike times
+        return np.sort(modulated_spike_times)
+    
+    def double_up_spikes_with_offset(self, spike_times, offset=0.001):
+        """
+        Doubles the spike times by adding a small offset to the second spike in each pair.
+        
+        :param spike_times: List or numpy array of original spike times.
+        :param offset: The offset to apply to the second spike in each pair (in ms).
+        :return: A numpy array of spike times with doubled spikes.
+        """
+        
+        # Duplicate the spike times
+        doubled_spikes = np.concatenate((spike_times, spike_times + offset))
+        
+        # Sort to ensure spike times are in chronological order
+        doubled_spikes.sort()
+        
+        return doubled_spikes
+
+
+
     def assign_centrif_ranks(self, centrif_inputsegs):
         """
         Assigns ranks to centrifugal input segments and returns a list of formatted GC input segments.
@@ -836,7 +886,9 @@ class OlfactoryBulb:
         """
         h = self.h
 
-        inhale_duration = self.params.inhale_duration
+        centrif_duration = 1800
+        setup_time = self.params.sim_setup_time
+
         gc_input_segs = self.assign_centrif_ranks(centrif_inputsegs)  # Get formatted segment info
 
         if not gc_input_segs:
@@ -848,104 +900,8 @@ class OlfactoryBulb:
         for seg_address, single_rank_gid, single_rank_address in gc_input_segs:
             try:
                 seg = eval(seg_address.replace('(1)', '(.999)'))
-            except IndexError:
-                print(f"Segment {seg_address} does not exist. Skipping.")
-                continue
-
-            syn = self.h.Exp2Syn(seg)
-            syn.tau1 = self.params.input_syn_tau1
-            syn.tau2 = self.params.input_syn_tau2
-
-            spike_times = self.get_constant_spike_train(t, self.params.inhale_duration, frequency=20, jitter=10)
-            ns = self.h.VecStim()
-            ns.play(self.h.Vector(spike_times))
-
-            netcon = self.h.NetCon(ns, syn, 0, 0, 0.5)
-            input_vec = self.h.Vector()
-            netcon.record(input_vec)
-
-            self.gc_input_vectors.append((seg_address, input_vec))
-            self.gc_inputs.append((syn, ns, netcon))
-
-    def stim_gc_segments(self, time, gc_input_segs, frequency):
-        #     """
-        #     Adds excitatory input to granule cell (GC) segments at a specified start time, intensity, and frequency.
-
-        #     The input is modeled as a constant frequency spike train that triggers excitatory synapses placed on 
-        #     the granule cell segments.
-
-        #     :param time: the onset time in ms.
-        #     :param gc_input_segs: a list containing tuples of:
-        #         a) The name of the segment to stimulate as it appears on the current MPI rank
-        #         b) Segment gid
-        #         c) Segment name as it appears when there is only one rank. If not using MPI, a) and c) are the same.
-        #     :param intensity: 0-1 representing input intensity.
-        #     :param frequency: Frequency of spikes (in Hz) for the constant spike train.
-
-        #     :return: None
-        #     """
-
-            h = self.h
-
-            inhale_duration = self.params.inhale_duration
-
-            for seg_name, seg_gid, single_rank_seg_name in gc_input_segs:
-                print('seg_name:', seg_name)
-                print('seg_gid:', seg_gid)
-                print('single_rank_seg_name', single_rank_seg_name)
-        #         # REPLACE THIS WITH OWN PERIPHERAL SPIKE TRAIN LOGIC
-        #         # Seed for randomization (if needed)
-                seed_source = "%s|%s|%s" % (self.rnd_seed, time, single_rank_seg_name)
-                np.random.seed(self.stable_hash(seed_source)) #good to here
-
-        #         # Generate a constant frequency spike train
-                spike_times = self.get_constant_spike_train(time, inhale_duration, frequency=frequency, jitter=0)
-        #         print("GC input spike times:", spike_times)
-                #spike_times = np.arange(time, time + (spike_count / frequency) * 1000, 1000 / frequency)
-
-        #         #Check if the segment exists
-                try:
-                    seg = eval(seg_name.replace('(1)', '(.999)'))
-                except IndexError:
-                    print(f"Segment {seg_name} does not exist. Skipping.")
-                    continue  # Skip this segment if it doesn't exist   
-
-        #         # Create synapse point process
-                seg = eval(seg_name.replace('(1)', '(.999)'))
-                syn = h.Exp2Syn(seg)
-        #         # to do: add periph input parameters to self.params
-        #         syn.tau1 = self.params.input_syn_tau1
-        #         syn.tau2 = self.params.input_syn_tau2
-
-                if "GC" in seg_name:  # MCs
-                    print("yes, GC in seg_name", seg_name)
-                    delay = self.params.mc_input_delay # set self.params.gc_input_delay
-                    weight = 0.5  # set self.params.gc_input_weight
-                else:
-                    pass
-
-        #         # VecStim to deliver events to synapse at vector times
-                ns = h.VecStim()
-                ns.play(h.Vector(spike_times + delay))
-
-        #         # Netcon to trigger the synapse
-                netcon = h.NetCon(
-                    ns,
-                    syn,
-                    0,  # thresh
-                    0,  # delay
-                    weight  # weight uS
-                )
-
-        #         # Record input events
-                input_vec = h.Vector()
-                netcon.record(input_vec)
-        #         # TO DO: create new list to keep track of your own input vectors
-                self.gc_input_vectors.append((seg_name, input_vec))
-
-                self.gc_inputs.append((syn, ns, netcon)) 
-
-        
+            exc gsinusoi
+    
     def load_cells(self, cell_type):
         """
         Load the cells of the specified type onto least busy MPI ranks.
