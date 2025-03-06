@@ -11,7 +11,7 @@ import os
 import yaml
 from pylab import * 
 from scipy import signal
-from scipy.signal import welch
+from scipy.signal import welch, get_window
 #from scipy.signal import ShortTimeFFT
 import matplotlib.ticker as tkr
 from plot_help import mix_colors
@@ -40,6 +40,70 @@ def get_power_spectr(t, lfp, dt, f_min=0, f_max=50, color='r'):
     plt.xlim(f_min, f_max)  # Focus on the frequency range of interest
     plt.grid(True)
 
+    plt.show()
+
+
+def calculate_power_psd(signal, fs, window_size=1024, step_size=256, freq_range=(15, 200)):
+    """
+    Calculate power spectral density using Welch’s method.
+    
+    Parameters:
+    - signal: 1D NumPy array, input signal.
+    - fs: Sampling frequency (Hz).
+    - window_size: Number of samples per window.
+    - step_size: Step size between windows (overlap).
+    - freq_range: Frequency range of interest (default: 15-200 Hz).
+    
+    Returns:
+    - power: Mean power in the specified frequency range (V²/Hz).
+    """
+    freqs, psd = welch(signal, fs=fs, nperseg=window_size, noverlap=window_size//2, window='boxcar')
+    
+    # Extract power in the desired frequency range
+    valid_idx = np.logical_and(freqs >= freq_range[0], freqs <= freq_range[1])
+    power = np.mean(psd[valid_idx])  # Mean power in the band (V²/Hz)
+    
+    return power, freqs, psd
+
+def plot_power_over_time_multiple_signals(signals, dt_ms, window_size=1024, step_size=256, freq_range=(15, 200), colors=None, labels=None):
+    """
+    Compute and plot power over time for multiple signals using Welch’s method.
+    
+    Parameters:
+    - signals: List of 1D NumPy arrays, input signals.
+    - dt_ms: Time step in milliseconds.
+    - window_size: Number of samples per window.
+    - step_size: Step size between windows (smaller = better resolution).
+    - freq_range: Frequency range of interest (default: 15-200 Hz).
+    - colors: List of colors to use for each signal's plot.
+    - labels: List of labels for the legend.
+    """
+    fs = 1000.0 / dt_ms  # Convert dt from ms to Hz
+    n_samples = len(signals[0])
+    times = np.arange(0, n_samples - window_size, step_size) * dt_ms / 1000  # Convert to seconds
+
+    # Plot for each signal
+    plt.figure(figsize=(12, 8))
+
+    for i, signal in enumerate(signals):
+        power_over_time = []
+
+        for start in range(0, n_samples - window_size, step_size):
+            segment = signal[start:start + window_size]
+            power, freqs, psd = calculate_power_psd(segment, fs, window_size=window_size, step_size=step_size, freq_range=freq_range)
+            power_over_time.append(power)
+
+        power_over_time = np.array(power_over_time)
+
+        # Plot the power for this signal
+        color = colors[i] if colors else f"C{i}"  # Default to matplotlib color cycle if no colors provided
+        label = labels[i] if labels else f'Signal {i+1}'  # Use provided label or default label
+        plt.plot(times, power_over_time, color=color, label=label)
+
+    plt.xlabel("Time (s)")
+    plt.ylabel("Power (V²/Hz)")
+    plt.title("Power Over Time  - Welch Method", size=16)
+    plt.legend()  # Display the legend
     plt.show()
 
 
@@ -80,26 +144,51 @@ def calculate_psd_and_dominant_frequency(signal, dt_ms, freq_range=(15, 200), np
 
 
 def calculate_fft_spectrum(signal, dt_ms, freq_range=(15, 200)):
-    dt_secs = dt_ms / 1000.0
-    n = len(signal)
-    fs = 1.0 / dt_secs  # Sampling frequency
+    """
+    Compute the FFT-based power spectral density (PSD) and dominant frequency 
+    for a given signal within a specified frequency range.
 
-    freqs = np.fft.rfftfreq(n, d=dt_secs)
-    fft_magnitude = np.abs(np.fft.rfft(signal))
+    Parameters:
+    - signal: 1D NumPy array, the input signal.
+    - dt_ms: Time step in milliseconds (time resolution of the signal).
+    - freq_range: Tuple (low, high) specifying the frequency range to analyze 
+                  (default is (15, 200) Hz).
 
-    # Normalize FFT power to match Welch’s power spectral density
+    Returns:
+    - freqs_filtered: Array of frequencies within the specified range (Hz).
+    - fft_power_filtered: Power spectral density within the specified frequency range (V²/Hz).
+    - dom_freq: Dominant frequency within the specified range (Hz).
+    - dom_power: Power at the dominant frequency (V²/Hz).
+    
+    Notes:
+    - The function computes the FFT of the signal, normalizes it to match the 
+      power spectral density (PSD) units (V²/Hz), and filters the result by 
+      the provided frequency range.
+    - Dominant frequency is identified as the frequency with the highest power 
+      within the filtered range.
+    """
+    dt_secs = dt_ms / 1000.0  # Convert time step from ms to seconds
+    n = len(signal)  # Length of the signal
+    fs = 1.0 / dt_secs  # Sampling frequency in Hz
+
+    # Compute the FFT of the signal (real frequencies)
+    freqs = np.fft.rfftfreq(n, d=dt_secs)  # Positive frequencies only
+    fft_magnitude = np.abs(np.fft.rfft(signal))  # Magnitude of FFT
+
+    # Normalize FFT power to match the power spectral density (V²/Hz)
     fft_power = (fft_magnitude ** 2) / (n * fs)
 
+    # Filter the frequencies and corresponding power spectral densities
     valid_idx = np.logical_and(freqs >= freq_range[0], freqs <= freq_range[1])
     freqs_filtered = freqs[valid_idx]
     fft_power_filtered = fft_power[valid_idx]
 
+    # Find the dominant frequency (peak of the power spectrum)
     dom_freq_idx = np.argmax(fft_power_filtered)
     dom_freq = freqs_filtered[dom_freq_idx]
     dom_power = fft_power_filtered[dom_freq_idx]
 
     return freqs_filtered, fft_power_filtered, dom_freq, dom_power
-
 
 
 def plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers, labels=None, colors=None):
@@ -115,7 +204,10 @@ def plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers, labels=None,
     - labels: List of labels for each spectrum.
     - colors: List of colors for each spectrum.
     """
-    plt.figure(figsize=(8, 4))
+    # Set font size globally
+    plt.rcParams.update({'font.size': 16})
+
+    plt.figure(figsize=(16, 8))
     
     if labels is None:
         labels = [f"Signal {i+1}" for i in range(len(freqs_list))]
@@ -128,10 +220,11 @@ def plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers, labels=None,
         #plt.scatter([dom_freq], [dom_power], color=color, edgecolor='black', zorder=3)  # Highlight peak
 
     plt.xlabel("Frequency (Hz)")
-    plt.ylabel("Power")
-    plt.title("Power Spectrum (15-200 Hz)")
+    plt.ylabel("Power (V²/Hz)")
+    plt.title("Power Spectrum (130-200 Hz)")
     plt.legend()
     plt.show()
+
 
 
 def get_csd(f, psd):
