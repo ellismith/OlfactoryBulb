@@ -71,6 +71,7 @@ def compute_synchrony(spike_times, cell_types, compare_within=False, t_start=0, 
     Returns:
     - synchrony_results: Dictionary with synchrony values for each cell type or pair of cell types.
     """
+    cell_type_spike_times = extract_spike_times_by_cell_type(spike_times, cell_types)
     synchrony_results = {}
 
     if compare_within:
@@ -106,37 +107,26 @@ def compute_synchrony(spike_times, cell_types, compare_within=False, t_start=0, 
 
 def compute_and_plot_sync(groups, compare_within=False, t_start=0, t_end=1800):
     """
-    Computes synchrony for cell groups and plots the results.
-
-    Parameters:
-    - groups: Dictionary with cell type names as keys and lists of spike trains as values.
-    - compare_within: Boolean to decide if comparing synchrony within each cell type or between cell types.
-    - t_start: Start time for analysis.
-    - t_end: End time for analysis.
+    Function to compute and plot synchrony based on the spike times grouped by cell types.
+    Args:
+    - groups: Dictionary with cell types as keys and lists of spike times.
+    - compare_within: Flag to compare synchrony within the same cell type or between different cell types.
+    - t_start: Start time for the analysis window.
+    - t_end: End time for the analysis window.
     """
-    synchrony_results = compute_synchrony(groups, cell_types=list(groups.keys()), compare_within=compare_within, t_start=t_start, t_end=t_end)
-
-    plt.figure(figsize=(10, 6))
-
-    # Define cell type colors
-    cell_type_colors = {
-        'MC': 'blue',
-        'TC': 'magenta',
-        'GC': 'orange'
-    }
-
-    if compare_within:
-        # Compare synchrony within each cell type
-        for cell_type, sync_data in synchrony_results.items():
-            plt.plot(sync_data['x'], sync_data['y'], label=f'{cell_type} within-type sync', color=cell_type_colors[cell_type])
-    else:
-        # Compare synchrony between different cell types
-        for pair, sync_data in synchrony_results.items():
+    # Compute synchrony (assuming this step fills synchrony_results)
+    synchrony_results = compute_synchrony(groups, compare_within, t_start, t_end)
+    
+    # Check and plot synchrony
+    for pair, sync_data in synchrony_results.items():
+        if 'x' in sync_data and 'y' in sync_data:
             plt.plot(sync_data['x'], sync_data['y'], label=f'{pair} sync')
-
-    plt.xlabel("Time (ms)")
-    plt.ylabel("Spike Synchrony")
-    plt.title("Spike Synchrony Profiles")
+        else:
+            # Handle missing keys gracefully
+            print(f"Warning: Missing 'x' or 'y' for pair {pair}")
+    
+    plt.xlabel('Time (ms)')
+    plt.ylabel('Synchrony')
     plt.legend()
     plt.show()
 
@@ -180,13 +170,73 @@ def compute_and_plot_average_sync(groups, compare_within=False, t_start=0, t_end
     avg_sync_values = list(avg_synchrony.values())
 
     # Create bar plot
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(6, 8))
     plt.bar(group_names, avg_sync_values, color=bar_colors, alpha=0.8)
 
-    plt.xlabel("Group")
-    plt.ylabel("Average Synchrony")
+    plt.xlabel("Group", size=20)
+    plt.ylabel("Average Synchrony", size=20)
+    plt.ylim(0,0.7)
     plt.title("Average Synchrony for Each Group")
     plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.tight_layout()
+    plt.show()
+
+
+def compute_and_plot_average_sync_intervals(groups, compare_within=False, time_intervals=None):
+    """
+    Computes and plots the average synchrony across multiple time intervals.
+
+    Parameters:
+    - groups: Dictionary with cell type names as keys and lists of spike trains as values.
+    - compare_within: Boolean to decide if comparing synchrony within each cell type or between cell types.
+    - time_intervals: List of (t_start, t_end) tuples defining the time windows for averaging.
+
+    If time_intervals is None, it defaults to a single interval (0 to 1800 ms).
+    """
+    if time_intervals is None:
+        time_intervals = [(0, 1800)]  # Default time window
+
+    # Store synchrony results across all time intervals
+    synchrony_across_sniffs = {group: [] for group in groups.keys()}
+
+    for t_start, t_end in time_intervals:
+        synchrony_results = compute_synchrony(groups, cell_types=list(groups.keys()), 
+                                              compare_within=compare_within, t_start=t_start, t_end=t_end)
+        # Accumulate results
+        for group, sync_data in synchrony_results.items():
+            synchrony_across_sniffs[group].append(np.mean(sync_data['y']))  # Average synchrony in this interval
+
+    # Compute overall average across sniffs
+    avg_synchrony = {group: np.mean(values) for group, values in synchrony_across_sniffs.items()}
+
+    # Define base colors for each cell type
+    cell_type_colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
+
+    # Determine colors for each bar
+    bar_colors = []
+    for group in avg_synchrony.keys():
+        if 'vs' in group:  # If comparing between cell types, mix colors
+            type1, type2 = group.split(' vs ')
+            mixed_color = mix_colors(cell_type_colors[type1], cell_type_colors[type2])
+            bar_colors.append(mixed_color)
+        else:  # Single cell type
+            bar_colors.append(cell_type_colors.get(group, 'gray'))
+
+    # Convert dictionary keys to lists for plotting
+    group_names = list(avg_synchrony.keys())
+    avg_sync_values = list(avg_synchrony.values())
+
+    # Create bar plot
+    plt.figure(figsize=(6, 8))
+    plt.bar(group_names, avg_sync_values, color=bar_colors, alpha=0.8)
+
+    plt.xlabel("Group", size=20)
+    plt.ylabel("Average Synchrony", size=20)
+    plt.ylim(0, 1)
+    plt.title("Average Synchrony Across Sniffs")
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
     plt.tight_layout()
     plt.show()
 
@@ -210,6 +260,7 @@ def compute_frequency_synchrony(spike_times, freq_ranges, dt_ms, compare_within=
     synchrony_results = {}
 
     for low, high in freq_ranges:
+        # bandpass_filter -- f_low_Hz: 0.06, f_high_Hz: 0.24 for 30,120 Hz??
         # Filter spike trains for the current frequency band
         filtered_spike_times = {
             cell_type: [filter_spike_train(train, low, high, fs) for train in trains]
@@ -224,6 +275,60 @@ def compute_frequency_synchrony(spike_times, freq_ranges, dt_ms, compare_within=
 
     return synchrony_results
 
+
+
+
+def plot_frequency_synchrony(synchrony_results):
+    plt.figure(figsize=(10, 6))  # Adjust figure size for clarity
+
+    # Set width of the bars
+    bar_width = 0.2
+    # Define colors for each label
+    colors_dict = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
+
+    # Get frequency ranges and the number of labels
+    freq_ranges = list(synchrony_results.keys())
+    num_labels = len(next(iter(synchrony_results.values())))  # Get number of labels from the first freq_range
+
+    all_labels = []  # To store all the comparison labels for later use
+
+    # Create bars for each frequency range and label
+    for i, (freq_range, sync_values) in enumerate(synchrony_results.items()):
+        for j, (label, sync_value) in enumerate(sync_values.items()):
+            sync_value_y = sync_value['y']  # Access the 'y' value in the dictionary
+
+            # Check if it's a within-type or between-type comparison
+            if 'vs' in label:  # Between-type comparison
+                type1, type2 = label.split(' vs ')
+                color1 = colors_dict.get(type1, 'gray')
+                color2 = colors_dict.get(type2, 'gray')
+                mixed_color = mix_colors(color1, color2)  # Function to mix two colors
+                plt.bar(i + j * bar_width, sync_value_y, width=bar_width, color=mixed_color, alpha=0.6)
+            else:  # Within-type comparison
+                cell_type = label.split(' ')[0]  # Assuming label format is "GC", "MC", etc.
+                plt.bar(i + j * bar_width, sync_value_y, width=bar_width, color=colors_dict.get(cell_type, 'gray'), alpha=0.6)
+
+            all_labels.append(label)
+
+    # Set x-ticks for frequency ranges
+    x_tick_positions = [i for i in range(len(freq_ranges))]
+    plt.xticks(x_tick_positions, freq_ranges, fontsize=18, rotation=40)  # Frequency range on the x-axis
+
+    # Set x-ticks for comparison labels, aligned under the frequency ranges
+    x_offset = []
+    for i in range(len(freq_ranges)):
+        for j in range(num_labels):
+            x_offset.append(i + j * bar_width)  # Calculate the position for each bar
+
+    plt.xticks(x_offset, all_labels, fontsize=14, rotation=40)
+
+    plt.yticks(fontsize=18)
+    plt.title(f'Synchrony in {freq_range} Hz Frequency Range', fontsize=20)
+    plt.ylabel('Synchrony Measure', fontsize=20)
+    plt.tight_layout()  # Ensure everything fits nicely
+    plt.show()
+
+###
 
 def convert_spike_times_to_binary(spike_times, duration, dt):
     """
@@ -316,65 +421,11 @@ def plot_spike_time_synchrony(synchrony_avg):
     plt.figure(figsize=(6, 10))
     plt.bar(bands, avg_synchrony, color='skyblue')
     plt.xlabel('Frequency Band (Hz)')
-    plt.ylabel('Average Spike-Time Synchrony')
+    plt.ylabel('Average Spike-Time Synchrony', size=20)
     plt.title('Spike-Time Synchrony Across Frequency Bands')
     plt.xticks(rotation=45)
     plt.grid(True)
     plt.show()
-
-
-def plot_frequency_synchrony(synchrony_results):
-    plt.figure(figsize=(6, 10))
-
-    # Set width of the bars
-    bar_width = 0.2
-    # Define colors for each label
-    colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'green'}
-    # Create lighter shades for the groups
-    colors.update({
-        'MC_glom1': '#A3C1E0',  # Lighter blue
-        'MC_glom2': '#B7D3E8',  # Even lighter blue
-        'TC_glom1': '#DDA0E6',  # Lighter magenta
-        'TC_glom2': '#E8B3E8'  # Even lighter magenta
-    })
-
-    # Get frequency ranges and the number of labels
-    freq_ranges = list(synchrony_results.keys())
-    num_labels = len(next(iter(synchrony_results.values())))  # Get number of labels from the first freq_range
-
-    # Create bars for each frequency range and label
-    for i, (freq_range, sync_values) in enumerate(synchrony_results.items()):
-        for j, (label, sync_value) in enumerate(sync_values.items()):
-            sync_value_y = sync_value['y']  # Access the 'y' value in the dictionary
-            # Determine color based on whether comparing pairs or single types
-            if 'vs' in label:  # If comparing pairs, mix their colors
-                type1, type2 = label.split(' vs ')
-                mixed_color = mix_colors(colors.get(type1, 'gray'), colors.get(type2, 'gray'))
-                plt.bar(i + j * bar_width, sync_value_y, width=bar_width, 
-                        color=mixed_color, alpha=0.6)
-            else:  # Single types
-                plt.bar(i + j * bar_width, sync_value_y, width=bar_width, 
-                        color=colors.get(label, 'gray'), alpha=0.6)
-
-    # Set x-ticks to the center of the grouped bars
-    x_tick_positions = [i + bar_width * (num_labels - 1) / 2 for i in range(len(freq_ranges))]
-    plt.xticks(x_tick_positions, freq_ranges, fontsize=24)  # Set x-tick labels to frequency ranges
-
-    # Add cell type labels under each frequency range
-    x_offset = []
-    for i, (freq_range, sync_values) in enumerate(synchrony_results.items()):
-        x_offset.extend([i + j * bar_width for j in range(num_labels)])
-
-    # Set x-ticks for each frequency range's label (cell types vs. others)
-    all_labels = [label for sync_values in synchrony_results.values() for label in sync_values.keys()]
-    plt.xticks(x_offset, all_labels, fontsize=24)
-
-    plt.yticks(fontsize=18)
-    plt.xlabel('Frequency Range', fontsize=28)
-    plt.ylabel('Synchrony Measure', fontsize=28)
-    plt.show()
-
-
 
 
 def calculate_means_and_stds(synchrony_results):
