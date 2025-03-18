@@ -124,7 +124,7 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, vmin=N
     plt.show()
 
 
-def compute_sniff_average(params_dict, t, lfp, dt_ms, wavelet, lowcut, highcut):
+def compute_verage(params_dict, t, lfp, dt_ms, wavelet, lowcut, highcut):
     cfs, frequencies, lfp_wavelet_power  = compute_wavelet_transform(lfp, dt_ms, num_scales=50, wavelet=wavelet, lowcut=lowcut, highcut=highcut, \
                                 scale_low=10, scale_high=2000, bp_order=6, logscales=False)
         
@@ -180,7 +180,7 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, wavele
     )
 
     plt.xlim((0, 200))
-    plt.ylim((20, 200))
+    plt.ylim((30,120))
 
     plt.ylabel('Frequency [Hz]', fontsize=14)
     plt.xlabel('Time Since Sniff Onset [ms]', fontsize=14)
@@ -204,7 +204,59 @@ def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, wavele
     plt.show()
 
 
-def plot_lfp_stft_stacked(t, lfp, dt, config, lowcut=1, highcut=200, bp_order=4, cmap_name='jet', vmin=None, vmax=None):
+def plot_stft_stacked(t, lfp, dt, config, vmin=None, vmax=None):
+    """
+    Plots stacked STFT spectrograms based on the given configuration.
+
+    Parameters:
+        t (array): Time vector (ms).
+        lfp (array): Local field potential signal.
+        dt (float): Time step of the simulation (ms).
+        config (dict): Configuration dictionary containing settings for window sizes and overlap.
+            config = {
+                "nperseg": [100, 200, 300],
+                "noverlap": [50, 100, 150]
+            }
+        vmin (float): Minimum value for color scale.
+        vmax (float): Maximum value for color scale.
+    """
+    num_configs = len(config["nperseg"])
+    plt.figure(figsize=(18, 5 * num_configs))  # Adjust figure height for stacked plots
+    
+    # Apply log transformation to the LFP
+    lfp_logged = np.log1p(np.abs(lfp))
+    
+    for i, (nperseg, noverlap) in enumerate(zip(config["nperseg"], config["noverlap"])):
+        ax = plt.subplot(num_configs, 1, i + 1)
+        
+        # Compute STFT
+        f, t_stft, Sxx = stft(lfp_logged, fs=1/(dt * 1e-3), nperseg=nperseg, noverlap=noverlap)
+        power = np.abs(Sxx) ** 2  # Compute power spectrum
+        
+        # Plot the spectrogram
+        contour = ax.contourf(t_stft * 1e3, f, power, 256, vmin=vmin, vmax=vmax, cmap='jet')
+        
+        ax.set_xlim(min(t), max(t))
+        ax.set_xlabel('Simulation Time [ms]', fontsize=14)
+        
+        ax.set_ylim([0, 200])  # Set max frequency to 200 Hz
+        ax.set_ylabel('Frequency [Hz]', fontsize=14)
+        
+        # Add a colorbar
+        cbar = plt.colorbar(contour, pad=0.02)
+        cbar.set_label('Power', fontsize=14)
+        cbar.ax.tick_params(labelsize=12)
+        
+        # Round colorbar ticks to 2 decimal places
+        cbar.formatter = tkr.FormatStrFormatter('%.2f')
+        cbar.update_ticks()
+        
+        ax.set_title(f"STFT: nperseg={nperseg}, noverlap={noverlap}", fontsize=18)
+    
+    plt.tight_layout()
+    plt.show()
+
+def plot_lfp_stft_stacked_old(t, lfp, dt, config, lowcut=1, highcut=200, bp_order=4, cmap_name='jet', vmin=None, vmax=None):
     """
     Plots stacked STFT spectrograms based on the given configuration.
 
@@ -240,6 +292,8 @@ def plot_lfp_stft_stacked(t, lfp, dt, config, lowcut=1, highcut=200, bp_order=4,
     plt.tight_layout()
     plt.subplots_adjust(hspace=0.5)  # Adjust vertical space between plots
     plt.show()
+
+
 
 
 def plot_scalogram(times, frequencies, power, fig_dir, params_filename='default', params_title=''):
