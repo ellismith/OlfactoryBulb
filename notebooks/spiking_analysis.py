@@ -279,6 +279,7 @@ def plot_spikes_dots(spike_times):
 
 
 def plot_spikes_dots_in_order(spike_times, gcs_og_indices, list_c):
+    gcs_w_centrif = []
     fig_width = 27
     fig_height = len(gcs_og_indices) * 0.3
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
@@ -295,7 +296,9 @@ def plot_spikes_dots_in_order(spike_times, gcs_og_indices, list_c):
         # Check if the seg is in the list_c, if so, overwrite color with red
         gc = gcs_og_indices[i]
         if gc in list_c:
+            print(gc)
             col = 'red'
+            gcs_w_centrif.append(gc)
 
         cell_type = seg[:3]
         cell_type_colors[cell_type] = col
@@ -324,7 +327,7 @@ def plot_spikes_dots_in_order(spike_times, gcs_og_indices, list_c):
         ax.plot([-0.05, -0.05], [positions[0], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
 
     plt.show()
-
+    return gcs_w_centrif
 
 def plot_spikes_raster(spike_times, ax):
     """
@@ -392,6 +395,21 @@ def extract_spike_times_by_cell_type(spike_times, cell_types):
                 break
     
     return cell_type_spike_times
+
+
+def get_gcs_w_centrif(spike_times, gc_og_indices, list_c):
+    """Returns a list of GC indices that are in list_c."""
+    gcs_w_centrif = []
+    gc_spike_times = spike_times[0:185]
+    for i, (seg, times) in enumerate(gc_spike_times):
+        if 'GC' in seg:
+            gc = gc_og_indices[i]
+            if gc in list_c:
+                print(gc)
+                gcs_w_centrif.append(gc)
+    print(len(gcs_w_centrif), "out of", len(gc_og_indices), "GCs receive centrifugal input")
+    
+    return gcs_w_centrif
 
 
     
