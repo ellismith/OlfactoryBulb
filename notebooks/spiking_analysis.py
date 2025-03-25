@@ -109,9 +109,6 @@ def plot_proportion_spiking(proportions):
 
 
 
-from collections import defaultdict
-import numpy as np
-
 def get_individual_firing_rates(spike_times, dt):
     """
     Computes the firing rates for individual cells.
@@ -147,6 +144,7 @@ def get_individual_firing_rates(spike_times, dt):
 
 
 def get_cell_type_firing_rates(spike_times, dt, if_population=False):
+    # edit so have firing rate during sniff
     """
     Computes the firing rates for each cell type (group).
 
@@ -234,56 +232,6 @@ def plot_firing_rates(firing_rates, full_cell_type=True):
     plt.show()
 
 
-def plot_spikes_delete(vs, spike_times):
-    fig_width = 27
-
-    fig, ax = plt.subplots(2, 1, figsize=(fig_width,len(vs)*0.2))
-
-    i = 0
-    # j = 0
-    # plt.subplots(figsize=(fig_width, len(vs)*0.1))
-    for cell, t, v in vs:
-        if 'MC' in cell:
-            col = 'blue'
-        if 'TC' in cell:
-            col = 'magenta'
-        if 'GC' in cell:
-            col = 'orange'
-            continue # don't plot GCs
-
-        ax[0].plot(t,np.array(v)+i,col,label=cell)
-        ax[0].set_ylabel("Voltage")
-        i += 100
-
-    i=0
-    spike_events = {}
-    for entry in spike_times:
-        seg_name = entry[0]
-        seg_times = spike_events.get(seg_name,[])
-        spike_events[seg_name] = seg_times + entry[1]
-
-    for seg, times in spike_times:
-        if 'MC4' in seg:
-            col = 'b'
-        if 'MC5' in seg:
-            col = 'c'
-        if 'TC3' in seg:
-            col = 'r'
-        if 'TC4' in seg:
-            col = 'm'
-        if 'TC5' in seg:
-            col = 'g'
-        if 'GC' in seg:
-            col = 'k'
-
-        i += 100
-
-        ax[1].plot(times, [i]*len(times),col+'.',ms=10,label=seg)
-        ax[1].set_ylabel("Spikes")
-        ax[1].legend()
-
-    plt.show()
-
 
 def plot_spikes_dots(spike_times):
     fig_width = 27
@@ -315,6 +263,54 @@ def plot_spikes_dots(spike_times):
 
     # Remove y-tick labels
     ax.set_yticks([])
+
+    # Add custom y-axis labels with larger font size
+    for cell_type, positions in cell_type_positions.items():
+        mid_pos = np.mean(positions)
+        ax.text(-0.1, mid_pos, cell_type, ha='center', va='center', fontsize=22, transform=ax.get_yaxis_transform())
+
+        # Draw colored vertical lines
+        col = cell_type_colors[cell_type]
+        ax.plot([-0.05, -0.02], [positions[0], positions[0]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
+        ax.plot([-0.05, -0.02], [positions[-1], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
+        ax.plot([-0.05, -0.05], [positions[0], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
+
+    plt.show()
+
+
+def plot_spikes_dots_in_order(spike_times, gcs_og_indices, list_c):
+    fig_width = 27
+    fig_height = len(gcs_og_indices) * 0.3
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+    cell_type_positions = defaultdict(list)
+    cell_type_colors = {}
+
+    for i, (seg, times) in enumerate(spike_times):
+        if 'GC' in seg:
+            col = 'black'
+        else:
+            continue  # Skip unknown types
+        
+        # Check if the seg is in the list_c, if so, overwrite color with red
+        gc = gcs_og_indices[i]
+        if gc in list_c:
+            col = 'red'
+
+        cell_type = seg[:3]
+        cell_type_colors[cell_type] = col
+
+        # Plot spikes as dots
+        ax.plot(times, [i] * len(times), color=col, marker='.', ms=10, linestyle='None')
+
+        # Track cell type positions
+        cell_type_positions[cell_type].append(i)
+
+        # Add 'seg' label next to the raster using the reversed gcs_og_indices
+        ax.text(-0.1, i, gcs_og_indices[i], ha='center', va='center', fontsize=12, transform=ax.get_yaxis_transform())
+
+    ax.set_xlabel('Simulation Time [ms]', fontsize=14)
+    ax.set_yticks([])  # Hide default y-tick labels
 
     # Add custom y-axis labels with larger font size
     for cell_type, positions in cell_type_positions.items():
