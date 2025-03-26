@@ -8,13 +8,23 @@ from inputs_help import gc_og_indices
 
 def load_spike_times(paramsets):
     spike_times_dict = {}
-    for paramset in paramsets:
+    params_dict = None
+    t = None
+    
+    for i, paramset in enumerate(paramsets):
         params_list, params_filename = get_params(paramset)
         results = load_result(paramset, lfp_pkl_file='lfp.pkl')
         spike_times = results[2]  # Extract spike_times from returned tuple
         new_list = [(key, value) for key, value in zip(gc_og_indices, spike_times)]
         spike_times_dict[paramset] = {gc: spikes for gc, (seg, spikes) in new_list if gc in gc_og_indices}
-    return spike_times_dict
+        
+        # Save params_dict and t from the first paramset
+        if i == 0:
+            params_dict = results[14]  # Corrected to use index 14 for params_dict
+            t = results[3]  # Corrected to use index 3 for t
+    
+    return spike_times_dict, params_dict, t
+
 
 
 
@@ -288,7 +298,7 @@ def plot_spike_metric(spike_times_control, spike_times_centrif, setup_time, T_si
     
     plt.figure(figsize=(30, 5))
     plt.bar(x - width/2, values_control, width=width, color='black', label='Control')
-    plt.bar(x + width/2, values_centrif, width=width, color='orange', label='CentrifInput_100segs')
+    plt.bar(x + width/2, values_centrif, width=width, color='orange', label='CentrifInput')
     
     plt.xticks(x, cell_ids, rotation=90, ha='right')
     plt.xlabel('Cell ID', size=16)
@@ -299,6 +309,44 @@ def plot_spike_metric(spike_times_control, spike_times_centrif, setup_time, T_si
     plt.show()
 
 
+def plot_spike_metric_from_paramsets(paramsets, metric='rate'):
+    # Load spike times data, params_dict, and t by calling load_spike_times
+    spike_times_data, params_dict, t = load_spike_times(paramsets)
+    
+    # Extract control paramset (first one) to compare with all others
+    control_paramset = paramsets[0]  # First paramset in the list
+    
+    # Prepare data for plotting
+    spike_data_control = compute_spike_rates(spike_times_data[control_paramset], params_dict['setup_time'], t[-1]) if metric == 'rate' else compute_spike_counts(spike_times_data[control_paramset])
+    
+    # Create a color list, first one as black (control), others with different colors
+    colors = ['black'] + ['red', 'orange', 'green', 'blue', 'purple'][:len(paramsets)-1]
+
+    # Initialize lists for the x-axis and y-values
+    cell_ids = list(spike_data_control.keys())
+    x = np.arange(len(cell_ids))
+    width = 0.4  # width of the bars
+    
+    plt.figure(figsize=(30,5))
+    # Plot bars for the control
+    values_control = [spike_data_control[cell] for cell in cell_ids]
+    plt.bar(x - width/2, values_control, width=width, color=colors[0], label=f'{control_paramset} (Control)')
+    
+    # Now, iterate through the other paramsets (centrif input, etc.)
+    for i, paramset in enumerate(paramsets[1:], 1):  # Skip the first one (control)
+        spike_data_other = compute_spike_rates(spike_times_data[paramset], params_dict['setup_time'], t[-1]) if metric == 'rate' else compute_spike_counts(spike_times_data[paramset])
+        values_other = [spike_data_other[cell] for cell in cell_ids]
+        plt.bar(x + width/2 + i * 0.1, values_other, width=width, color=colors[i], label=paramset)
+
+    # Final touches to the plot
+    
+    plt.xticks(x, cell_ids, rotation=90, ha='right')
+    plt.xlabel('Cell ID')
+    plt.ylabel(f'Spike {metric.capitalize()}')
+    plt.title(f'Spike {metric.capitalize()} per Cell for All Paramsets')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_avg_spike_rate_change(experiments, setup_time, T_sim):
@@ -314,6 +362,35 @@ def plot_avg_spike_rate_change(experiments, setup_time, T_sim):
     plt.tight_layout()
     plt.show()
 
+def plot_avg_spike_rate_change_for_all(paramsets):
+    # Load spike times data, params_dict, and t by calling load_spike_times
+    spike_times_data, params_dict, t = load_spike_times(paramsets)
+    
+    # Create a color list: control as black, others as different colors
+    colors = ['black'] + ['red', 'orange', 'green', 'blue', 'purple'][:len(paramsets)-1]
+    
+    # Compute the average spike rate change for each paramset
+    avg_changes = []
+    for i, paramset in enumerate(paramsets):
+        # Compute spike rates for control and the current paramset
+        rates_control = compute_spike_rates(spike_times_data[paramsets[0]], params_dict['setup_time'], t[-1])
+        rates_other = compute_spike_rates(spike_times_data[paramset], params_dict['setup_time'], t[-1])
+        
+        # Compute the spike rate difference
+        rate_differences = [rates_other[cell] - rates_control[cell] for cell in rates_control]
+        avg_rate_change = np.mean(rate_differences)
+        
+        avg_changes.append(avg_rate_change)
+    
+    # Plot the average spike rate changes
+    plt.figure(figsize=(12, 4))
+    plt.bar(range(len(paramsets)), avg_changes, color=colors, tick_label=paramsets)
+    plt.xlabel('Experiment')
+    plt.ylabel('Change in Average Spike Rate (spikes/s)')
+    plt.title('Change in Spike Rate Relative to Control')
+    plt.axhline(0, color='gray', linestyle='--')  # Gray horizontal line at y=0
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_firing_rates(group_firing_rates, title="Spike Rates by Cell Type"):
