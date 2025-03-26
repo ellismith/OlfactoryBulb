@@ -2,8 +2,42 @@ from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 
-from load import load_result
+from load import get_params, load_result
+from inputs_help import gc_og_indices
 
+
+def load_spike_times(paramsets):
+    spike_times_dict = {}
+    for paramset in paramsets:
+        params_list, params_filename = get_params(paramset)
+        results = load_result(paramset, lfp_pkl_file='lfp.pkl')
+        spike_times = results[2]  # Extract spike_times from returned tuple
+        new_list = [(key, value) for key, value in zip(gc_og_indices, spike_times)]
+        spike_times_dict[paramset] = {gc: spikes for gc, (seg, spikes) in new_list if gc in gc_og_indices}
+    return spike_times_dict
+
+
+
+def extract_spike_times_by_cell_type(spike_times, cell_types):
+    """
+    Extract spike times for each cell type from the spike_times data.
+
+    Parameters:
+    - spike_times: List of tuples containing cell name and spike times.
+    - cell_types: List of cell types to extract.
+
+    Returns:
+    - cell_type_spike_times: Dictionary with cell types as keys and lists of spike times as values.
+    """
+    cell_type_spike_times = defaultdict(list)
+
+    for cell, spikes in spike_times:
+        for cell_type in cell_types:
+            if cell_type in cell:
+                cell_type_spike_times[cell_type].append(spikes)
+                break
+    
+    return cell_type_spike_times
 
 
 def get_spiking_cells(spike_times):
@@ -15,6 +49,18 @@ def get_spiking_cells(spike_times):
             spike_times_clean.append(times)
 
     return spiking_cells, spike_times_clean
+
+
+
+# Define simulation duration excluding setup time
+def compute_spike_counts(spike_times_dict):
+    return {cell_id: len(spikes) for cell_id, spikes in spike_times_dict.items()}
+
+
+def compute_spike_rates(spike_times_dict, setup_time, T_sim):
+    duration = T_sim - setup_time
+    return {cell_id: len(spikes) / duration for cell_id, spikes in spike_times_dict.items()}
+
 
 
 def get_proportion_spiking(spike_times):
@@ -42,70 +88,17 @@ def get_proportion_spiking(spike_times):
     return proportions
 
 
-def get_proportion_spiking2(spike_times):
 
-    # Initialize dictionaries to track cell type counts and spiking cells
-    cell_type_counts = defaultdict(int)
-    spiking_cells = defaultdict(int)
+def compute_avg_spike_rate_change(spike_times_control, spike_times_centrif, setup_time, T_sim):
+    rates_control = compute_spike_rates(spike_times_control, setup_time, T_sim)
+    rates_centrif = compute_spike_rates(spike_times_centrif, setup_time, T_sim)
     
-    # Iterate through the spike_times to count spiking and total cells
-    for seg, times in spike_times:
-        # Determine main group (MC, TC, GC)
-        if 'MC' in seg:
-            main_group = 'MC'
-        elif 'TC' in seg:
-            main_group = 'TC'
-        elif 'GC' in seg:
-            main_group = 'GC'
-        else:
-            continue  # Skip unknown types
-
-        cell_type_counts[main_group] += 1
-        if times:  # Check if there are any spikes
-            spiking_cells[main_group] += 1
-
-    # Calculate proportions of spiking cells for each group
-    proportions = {}
-    for group in ['MC', 'TC', 'GC']:
-        total_cells = cell_type_counts[group]
-        spiking_cells_count = spiking_cells.get(group, 0)
-        proportion_spiking = spiking_cells_count / total_cells
-        proportions[group] = proportion_spiking
-
-    return proportions
+    rate_differences = [rates_centrif[cell] - rates_control[cell] for cell in rates_control]
+    avg_rate_change = np.mean(rate_differences)
+    
+    return avg_rate_change
 
 
-def plot_proportion_spiking(proportions):
-
-    # Determine if the dictionary contains detailed or aggregated data
-    if any(len(key) > 3 for key in proportions):
-        # Compute average proportions for main groups (MC, TC, GC)
-        avg_proportions = {}
-        for key, proportion in proportions.items():
-            main_group = key[:3]
-            if main_group not in avg_proportions:
-                avg_proportions[main_group] = [proportion, 1]
-            else:
-                avg_proportions[main_group][0] += proportion
-                avg_proportions[main_group][1] += 1
-        avg_proportions = {k: v[0] / v[1] for k, v in avg_proportions.items()}
-    else:
-        avg_proportions = proportions
-
-    labels, values = zip(*avg_proportions.items())
-    colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
-    bars = plt.bar(labels, values, color=[colors.get(label[:3], 'grey') for label in labels])
-
-    plt.xlabel('Cell Type')
-    plt.ylabel('Proportion of Spiking Cells')
-    plt.title('Proportion of Spiking Cells by Cell Type')
-    plt.xticks(rotation=0)
-
-    # Add a legend for the color coding
-    handles = [plt.Line2D([0], [0], color=colors[label], lw=4) for label in colors]
-    plt.legend(handles, colors.keys())
-
-    plt.show()
 
 
 
@@ -143,93 +136,213 @@ def get_individual_firing_rates(spike_times, dt):
     return cell_firing_rates
 
 
-def get_cell_type_firing_rates(spike_times, dt, if_population=False):
-    # edit so have firing rate during sniff
+def get_group_firing_rates(spike_times, dt):
     """
-    Computes the firing rates for each cell type (group).
+    Computes the average firing rate for each cell group.
 
     Parameters:
     spike_times (list of tuples): Each tuple contains a cell identifier and a list of spike times.
     dt (float): Time step in milliseconds.
-    if_population (bool): If True, computes total population firing rate (spikes / total time).
-                          If False, computes average firing rate per cell.
 
     Returns:
-    dict: Firing rates for each cell type (Hz).
+    dict: Average firing rates for each cell group (Hz).
     """
     assert dt > 0, "dt must be a positive value."
 
-    spike_counts = defaultdict(int)
-    cell_type_counts = defaultdict(int)
-    cell_type_firing_rates = {}
+    # Compute individual firing rates
+    cell_firing_rates = get_individual_firing_rates(spike_times, dt)
 
-    # Find the total duration of the simulation
-    all_spike_times = [time for _, times in spike_times for time in times]
-    total_time_ms = max(all_spike_times) if all_spike_times else 1  # Prevent division by zero
-    total_time_s = total_time_ms / 1000  # Convert ms to seconds
+    # Group firing rates by cell type (e.g., MC3, GC3)
+    group_firing_rates = {}
+    group_counts = {}
 
-    for seg, times in spike_times:
-        assert isinstance(times, list), f"Spike times for {seg} should be a list."
+    for seg, rate in cell_firing_rates.items():
+        seg_clean = seg.replace("soma", "")  # Remove 'soma'
+        group = ''.join(filter(str.isalpha, seg_clean)) + seg_clean.split('[')[0][-1]  # Extracts group (e.g., MC3, GC3)
+
+        if group not in group_firing_rates:
+            group_firing_rates[group] = 0
+            group_counts[group] = 0
         
-        cell_type = seg[:3]  # Extracts GC, MC, or TC
-        cell_type_counts[cell_type] += 1
-        spike_counts[cell_type] += len(times)
+        group_firing_rates[group] += rate
+        group_counts[group] += 1
 
-    # Compute firing rate per cell type
-    for cell_type in spike_counts:
-        total_spikes = spike_counts[cell_type]
-        total_cells = cell_type_counts[cell_type]
+    # Compute the average firing rate per group
+    for group in group_firing_rates:
+        group_firing_rates[group] /= group_counts[group]
 
-        if if_population:
-            # Compute total population firing rate (spikes / total time)
-            firing_rate = total_spikes / total_time_s if total_time_s > 0 else 0
-        else:
-            # Compute average firing rate per cell (spikes / (num cells * total time))
-            firing_rate = total_spikes / (total_cells * total_time_s) if total_cells > 0 else 0
-        
-        cell_type_firing_rates[cell_type] = firing_rate
-
-    return cell_type_firing_rates
+    return group_firing_rates
 
 
-def plot_firing_rates(firing_rates, full_cell_type=True):
+
+def get_gcs_w_centrif(spike_times, gc_og_indices, list_c):
+    """Returns a list of GC indices that are in list_c."""
+    gcs_w_centrif_spike_times = []
+    gc_spike_times = spike_times[0:185]
+    for i, (seg, times) in enumerate(gc_spike_times):
+        if 'GC' in seg:
+            gc = gc_og_indices[i]
+            if gc in list_c:
+                print(gc)
+                gcs_w_centrif_spike_times.append(gc)
+    print(len(gcs_w_centrif_spike_times), "out of", len(gc_og_indices), "GCs receive centrifugal input")
+    
+    return gcs_w_centrif_spike_times
+
+
+def get_gc_activity(spike_times, gcs_og_indices, list_c):
+    """Returns spike counts for all GCs and those receiving centrifugal input."""
+    new_list = [(key, value) for key, value in zip(gcs_og_indices, spike_times)]
+    
+    all_gc_spike_counts = [len(spikes) for _, (_, spikes) in new_list]
+    
+    gcs_w_centrif = [key for key in gcs_og_indices if key in list_c]
+    centrif_gc_spike_counts = [len(spikes) for key, (_, spikes) in new_list if key in gcs_w_centrif]
+    
+    return all_gc_spike_counts, centrif_gc_spike_counts
+
+
+def get_gc_spike_rates(spike_times, gcs_og_indices, list_c, T):
     """
-    Plots a bar chart for the given firing rates with specific colors.
+    Returns spike rates (in Hz) for all GCs and those receiving centrifugal input.
+    
+    Parameters:
+    spike_times (list): List of spike times for each neuron.
+    gcs_og_indices (list): List of indices corresponding to GC neurons.
+    list_c (list): List of GCs receiving centrifugal input.
+    T (float): Total duration of the observation (in seconds).
+    
+    Returns:
+    all_gc_spike_rates (list): List of spike rates (Hz) for all GCs.
+    centrif_gc_spike_rates (list): List of spike rates (Hz) for GCs with centrifugal input.
+    """
+    # Pair spike_times with corresponding GC indices
+    new_list = [(key, value) for key, value in zip(gcs_og_indices, spike_times)]
+    
+    # Calculate spike counts and convert them to spike rates (Hz)
+    all_gc_spike_counts = [len(spikes) for _, (_, spikes) in new_list]
+    all_gc_spike_rates = [count / T for count in all_gc_spike_counts]
+    
+    # Identify GCs with centrifugal input
+    gcs_w_centrif = [key for key in gcs_og_indices if key in list_c]
+    
+    # Calculate spike counts and rates for GCs with centrifugal input
+    centrif_gc_spike_counts = [len(spikes) for key, (_, spikes) in new_list if key in gcs_w_centrif]
+    centrif_gc_spike_rates = [count / T for count in centrif_gc_spike_counts]
+    
+    return all_gc_spike_rates, centrif_gc_spike_rates
+
+
+def plot_proportion_spiking(proportions):
+
+    # Determine if the dictionary contains detailed or aggregated data
+    if any(len(key) > 3 for key in proportions):
+        # Compute average proportions for main groups (MC, TC, GC)
+        avg_proportions = {}
+        for key, proportion in proportions.items():
+            main_group = key[:3]
+            if main_group not in avg_proportions:
+                avg_proportions[main_group] = [proportion, 1]
+            else:
+                avg_proportions[main_group][0] += proportion
+                avg_proportions[main_group][1] += 1
+        avg_proportions = {k: v[0] / v[1] for k, v in avg_proportions.items()}
+    else:
+        avg_proportions = proportions
+
+    labels, values = zip(*avg_proportions.items())
+    colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
+    bars = plt.bar(labels, values, color=[colors.get(label[:3], 'grey') for label in labels])
+
+    plt.xlabel('Cell Type')
+    plt.ylabel('Proportion of Spiking Cells')
+    plt.title('Proportion of Spiking Cells by Cell Type')
+    plt.xticks(rotation=0)
+
+    # Add a legend for the color coding
+    handles = [plt.Line2D([0], [0], color=colors[label], lw=4) for label in colors]
+    plt.legend(handles, colors.keys())
+
+    plt.show()
+
+def plot_spike_metric(spike_times_control, spike_times_centrif, setup_time, T_sim, metric='rate'):
+    if metric == 'rate':
+        spike_data_control = compute_spike_rates(spike_times_control, setup_time, T_sim)
+        spike_data_centrif = compute_spike_rates(spike_times_centrif, setup_time, T_sim)
+        ylabel = 'Spike Rate (spikes/s)'
+    else:
+        spike_data_control = compute_spike_counts(spike_times_control)
+        spike_data_centrif = compute_spike_counts(spike_times_centrif)
+        ylabel = 'Spike Count'
+    
+    # Ensure both sets have the same cell order
+    cell_ids = list(spike_data_control.keys())
+    
+    # Get corresponding values for each condition
+    values_control = [spike_data_control[cell] for cell in cell_ids]
+    values_centrif = [spike_data_centrif[cell] for cell in cell_ids]
+    
+    # Plot side-by-side histogram
+    x = np.arange(len(cell_ids))  # X positions
+    width = 0.4  # Bar width
+    
+    plt.figure(figsize=(30, 5))
+    plt.bar(x - width/2, values_control, width=width, color='black', label='Control')
+    plt.bar(x + width/2, values_centrif, width=width, color='orange', label='CentrifInput_100segs')
+    
+    plt.xticks(x, cell_ids, rotation=90, ha='right')
+    plt.xlabel('Cell ID', size=16)
+    plt.ylabel(ylabel, size=16)
+    plt.title(f'Spike {ylabel} per Cell', size=16)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+
+
+def plot_avg_spike_rate_change(experiments, setup_time, T_sim):
+    experiment_names = list(experiments.keys())
+    avg_changes = [compute_avg_spike_rate_change(experiments['Control']['spike_times'], experiments[exp]['spike_times'], setup_time, T_sim) for exp in experiment_names if exp != 'Control']
+    
+    plt.figure(figsize=(6, 4))
+    plt.bar([0] + list(range(1, len(avg_changes) + 1)), [0] + avg_changes, color=['black'] + ['orange'] * len(avg_changes))
+    plt.xticks(range(len(experiment_names)), experiment_names, rotation=45, ha='right')
+    plt.ylabel('Change in Average Spike Rate (spikes/s)')
+    plt.title('Change in Spike Rate Relative to Control')
+    plt.axhline(0, color='gray', linestyle='--')
+    plt.tight_layout()
+    plt.show()
+
+
+
+def plot_firing_rates(group_firing_rates, title="Spike Rates by Cell Type"):
+    """
+    Plots the firing rates for each cell group.
 
     Parameters:
-    firing_rates (dict): Dictionary where keys are cell names and values are spike rates.
-    full_cell_type (bool): If True, plot individual cell types; if False, group by MC, TC, GC.
+    group_firing_rates (dict): Dictionary with cell group names as keys and firing rates as values.
+    title (str): Title of the plot.
     """
+    colors = {'MC': 'magenta', 'TC': 'blue', 'GC': 'orange'}  # Define colors for each cell type
     
-    if full_cell_type:
-        # Sort keys to ensure MCs appear first, then TCs, then GCs
-        sorted_cells = sorted(firing_rates.keys(), key=lambda x: ('MC' not in x, 'TC' not in x, x))
-        labels = sorted_cells
-        values = [firing_rates[cell] for cell in labels]
-        colors = ['blue' if 'MC' in cell else 'magenta' if 'TC' in cell else 'orange' for cell in labels]
-    
-    else:
-        # Group by broad categories and compute the average
-        grouped_rates = {'MC': [], 'TC': [], 'GC': []}
-        for cell, rate in firing_rates.items():
-            if 'MC' in cell:
-                grouped_rates['MC'].append(rate)
-            elif 'TC' in cell:
-                grouped_rates['TC'].append(rate)
-            elif 'GC' in cell:
-                grouped_rates['GC'].append(rate)
-        
-        labels = ['MC', 'TC', 'GC']  # Explicit order
-        values = [np.mean(grouped_rates[cell]) for cell in labels]
-        colors = ['blue', 'magenta', 'orange']
+    # Sort groups for better visualization
+    sorted_groups = sorted(group_firing_rates.keys())
+    firing_rates = [group_firing_rates[group] for group in sorted_groups]
 
-    plt.figure(figsize=(8, 5))
-    plt.bar(labels, values, color=colors)
-    plt.xlabel("Cell Type")
-    plt.ylabel("Spike Rate (Hz)")
-    plt.title("Spike Rates by Cell Type")
-    plt.xticks(rotation=45)
+    # Assign colors based on cell type prefix
+    bar_colors = [colors[group[:2]] for group in sorted_groups]
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.bar(sorted_groups, firing_rates, color=bar_colors)
+    plt.xlabel("Cell Group")
+    plt.ylabel("Firing Rate (Hz)")
+    plt.title(title)
+    plt.xticks(rotation=0)  # Keep labels horizontal
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
     plt.show()
+
 
 
 
@@ -318,7 +431,7 @@ def plot_spikes_dots_in_order(spike_times, gcs_og_indices, list_c):
     # Add custom y-axis labels with larger font size
     for cell_type, positions in cell_type_positions.items():
         mid_pos = np.mean(positions)
-        ax.text(-0.1, mid_pos, cell_type, ha='center', va='center', fontsize=22, transform=ax.get_yaxis_transform())
+        #ax.text(-0.1, mid_pos, cell_type, ha='center', va='center', fontsize=22, transform=ax.get_yaxis_transform())
 
         # Draw colored vertical lines
         col = cell_type_colors[cell_type]
@@ -375,41 +488,6 @@ def plot_spikes_raster(spike_times, ax):
         ax.plot([-0.05, -0.05], [positions[0], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
 
 
-def extract_spike_times_by_cell_type(spike_times, cell_types):
-    """
-    Extract spike times for each cell type from the spike_times data.
-
-    Parameters:
-    - spike_times: List of tuples containing cell name and spike times.
-    - cell_types: List of cell types to extract.
-
-    Returns:
-    - cell_type_spike_times: Dictionary with cell types as keys and lists of spike times as values.
-    """
-    cell_type_spike_times = defaultdict(list)
-
-    for cell, spikes in spike_times:
-        for cell_type in cell_types:
-            if cell_type in cell:
-                cell_type_spike_times[cell_type].append(spikes)
-                break
-    
-    return cell_type_spike_times
-
-
-def get_gcs_w_centrif(spike_times, gc_og_indices, list_c):
-    """Returns a list of GC indices that are in list_c."""
-    gcs_w_centrif = []
-    gc_spike_times = spike_times[0:185]
-    for i, (seg, times) in enumerate(gc_spike_times):
-        if 'GC' in seg:
-            gc = gc_og_indices[i]
-            if gc in list_c:
-                print(gc)
-                gcs_w_centrif.append(gc)
-    print(len(gcs_w_centrif), "out of", len(gc_og_indices), "GCs receive centrifugal input")
-    
-    return gcs_w_centrif
 
 
     
