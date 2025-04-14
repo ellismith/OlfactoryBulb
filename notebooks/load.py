@@ -8,10 +8,10 @@ except:
 import os
 import pywt
 import yaml
-
+import random
 
 from filtering import *
-
+from wavelet import *
 
 
 ######################## Loading functions ###############################
@@ -20,7 +20,7 @@ def get_dirs(paramset='ParameterSetBase'):
     cwd = os.getcwd()
     ob_dir = os.path.dirname(cwd)
 
-    results_dir = os.path.join(ob_dir, 'results_newcombo6')
+    results_dir = os.path.join(ob_dir, 'results_newcombo4')
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
 
@@ -82,6 +82,10 @@ def get_params(paramset):
         sniff_count = params_dict['sniff_count']
     else:
         sniff_count = 8
+    if 'sniff_rate' in params_dict:
+        sniff_rate = params_dict['sniff_rate']
+    else:
+        sniff_rate = 5
     
     #if 'electrode_location' in params_dict:  # Check if 'electrode_location' is None
     #    electrode_location = params_dict['electrode_location']
@@ -193,7 +197,7 @@ def load_result(paramset, lfp_pkl_file='lfp.pkl'):
     if 'sniff_count' in params_dict:
         sniff_count = params_dict['sniff_count']
     else:
-        sniff_count = 8
+        sniff_count = 9
     
     with open(os.path.join(paramset_dir, 'input_times.pkl'), 'rb') as f:
         input_times = cPickle.load(f)
@@ -228,20 +232,28 @@ def load_result(paramset, lfp_pkl_file='lfp.pkl'):
 
 
     # Band pass filter LFP
-    lfp_bp_beta = butter_bandpass_filter(lfp, 15, 40, 1/dt*1000, order=3)  # 15, 40 Hz, order=4 default
-    lfp_bp_gamma = butter_bandpass_filter(lfp, 30, 120, 1/dt*1000, order=3)
-    lfp_bp_hfo = butter_bandpass_filter(lfp, 130, 200, 1/dt*1000, order=3)
+    #lfp_bp_beta_gamma = bandpass_filter(lfp, 15, 120, dt, order=6, filter_type='sosfiltfilt')
+    lfp_bp_theta = bandpass_filter(lfp, 3, 12, dt, order=6, filter_type='sosfiltfilt')  
+    lfp_bp_beta = bandpass_filter(lfp, 15, 40, dt, order=6, filter_type='sosfiltfilt')  # 15, 40 Hz, order=4 default
+    lfp_bp_gamma = bandpass_filter(lfp, 30, 120, dt, order=6, filter_type='sosfiltfilt')
+    lfp_bp_hfo = bandpass_filter(lfp, 130, 200, dt, order=6, filter_type='sosfiltfilt')
 
+    
     # Wavelet decomposition
     wavelet = "cgau5"
-    scale_low = 1     # 140 Hz
-    scale_high = 32   # 20 Hz
-
-    scales = np.linspace(scale_low/dt, scale_high/dt, 50)
+    scale_low = 10     # 140 Hz
+    scale_high = 2000   # 20 Hz
+    
+    scales = np.linspace(scale_low, scale_high, 50)
 
     cfs, frequencies = pywt.cwt(lfp, scales, wavelet, dt / 1000.0)  # was lfp_bp_gamma 
     lfp_wavelet_power = np.log(1+abs(cfs))
 
+    print("scale_low:", scale_low)
+    print("scale_high:", scale_high)
+    print("np.max(power) =", np.max(lfp_wavelet_power))
+    
+   
     if 'sniff_rate' in params_dict:
         sniff_rate = params_dict['sniff_rate']
     else:
@@ -254,16 +266,49 @@ def load_result(paramset, lfp_pkl_file='lfp.pkl'):
 
     # range(1,9) for 8 sniffs
     # [skip_first_n_sniffs:] creates a new Python list with all but the first element 
-    lfp_wavelet_power_per_sniff = np.array([lfp_wavelet_power[:, i*step:(i+1) * step - 2] \
-                                            for i in range(sniff_count + skip_first_n_sniffs)[skip_first_n_sniffs:]])
+    #lfp_wavelet_power_per_sniff = np.array([lfp_wavelet_power[:, i*step:(i+1) * step - 2] for i in range(sniff_count + skip_first_n_sniffs)[skip_first_n_sniffs:]])
+    #lfp_wavelet_power_average = np.average(lfp_wavelet_power_per_sniff, axis=0)
+    lfp_wavelet_power_per_sniff = []
+    for i in range(skip_first_n_sniffs, sniff_count + skip_first_n_sniffs):
+        start = i * step
+        end = start + step - 2
+        if end <= lfp_wavelet_power.shape[1]:  # Ensure we don't slice beyond array
+            lfp_wavelet_power_per_sniff.append(lfp_wavelet_power[:, start:end])
+
+    lfp_wavelet_power_per_sniff = np.array(lfp_wavelet_power_per_sniff)
     lfp_wavelet_power_average = np.average(lfp_wavelet_power_per_sniff, axis=0)
 
     t_average = t[0:step-2]
     # took out t_average, lfp_wavelet_power_average,  before params_dict
     
-    return events, vs, spike_times, t, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
-        lfp_wavelet_power, scales, wavelet, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict
+    # fix functionality later:
+    return events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict
 
+
+
+# Function to load results for multiple paramsets
+def load_results_for_comparison(paramsets):
+    """
+    Load results for multiple paramsets.
+    Return lfp_bp_beta, lfp_bp_gamma, and t for each paramset.
+    """
+    lfp_bp_beta_all = []
+    lfp_bp_gamma_all = []
+    t_all = []
+    
+    # Loop through the paramsets
+    for paramset in paramsets:
+        events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, \
+        lfp_bp_hfo, lfp_wavelet_power, dt, frequencies, t_average, \
+        lfp_wavelet_power_average, params_dict = load_result(paramset)
+        
+        # Store lfp_bp_beta, lfp_bp_gamma, and t
+        lfp_bp_beta_all.append(lfp_bp_beta)
+        lfp_bp_gamma_all.append(lfp_bp_gamma)
+        t_all.append(t)  # Store the time vector t for each paramset
+    
+    return lfp_bp_beta_all, lfp_bp_gamma_all, t_all
 
 
 def get_cell_info(events):
@@ -312,6 +357,7 @@ def separate_glomcell_data(vs, glomcell_list1, glomcell_list2):
             data_list2.append((cell, time, voltage_trace))
     
     return data_list1, data_list2
+
 
 
 # Function to get indices of cells in raw lists that are in the target lists
