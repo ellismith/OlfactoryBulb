@@ -21,6 +21,7 @@ from random import random, seed
 from olfactorybulb.paramsets.base import *
 from olfactorybulb.paramsets.case_studies import *
 from olfactorybulb.paramsets.sensitivity import *
+from notebooks.inputs_help import gc_og_indices, get_random_apics 
 
 
 debug_cells = True
@@ -154,40 +155,7 @@ class OlfactoryBulb:
                     [setattr(s, syn_attrib, attrib_value) for s in getattr(h, syn_mech)]
 
        
-        centrif_inputsegs =  ['GC5[196].apic[4]',  'GC1[30].apic[10]',  'GC5[6].apic[7]',  \
-                               'GC1[178].apic[8]',  'GC3[70].apic[1]',  'GC3[62].apic[2]',  \
-                                'GC3[58].apic[6]',  'GC3[36].apic[1]',  'GC3[196].apic[7]',  \
-                                    'GC5[38].apic[8]',  'GC1[156].apic[0]',  'GC1[178].apic[10]',  \
-                                        'GC5[260].apic[8]',  'GC5[168].apic[1]',  'GC5[26].apic[1]',  \
-                                            'GC3[172].apic[6]',  'GC3[114].apic[5]',  'GC1[4].apic[4]',  \
-                                                'GC1[4].apic[8]',  'GC5[32].apic[7]',  'GC3[56].apic[6]',  \
-                                                    'GC5[98].apic[7]',  'GC5[156].apic[4]',  'GC3[176].apic[3]',  \
-                                                    'GC5[6].apic[4]',  'GC3[156].apic[7]',  'GC3[52].apic[4]',  \
-                                                        'GC5[224].apic[8]',  'GC3[178].apic[4]',  'GC3[188].apic[8]',  \
-                                                            'GC5[138].apic[0]',  'GC3[56].apic[2]',  'GC1[112].apic[0]',  \
-                                                            'GC3[172].apic[9]',  'GC3[72].apic[5]',  'GC1[198].apic[9]',  \
-                                                                'GC5[254].apic[5]',  'GC5[0].apic[5]',  'GC3[202].apic[1]',  \
-                                                                    'GC3[222].apic[5]',  'GC1[32].apic[9]',  'GC1[164].apic[5]',  \
-                                                                        'GC3[114].apic[4]',  'GC1[80].apic[0]',  'GC3[42].apic[6]',  \
-                                                                            'GC1[46].apic[3]',  'GC3[204].apic[2]',  'GC1[80].apic[7]',  \
-                                                                                'GC3[26].apic[0]',  'GC1[94].apic[8]',  'GC5[32].apic[0]']     # 50
-                                                                                    #'GC3[92].apic[0]',  'GC5[250].apic[1]',  'GC3[88].apic[2]',  \
-                                                                                    #    'GC5[184].apic[8]',  'GC1[60].apic[3]',  'GC3[222].apic[3]',  \
-                                                                                    #        'GC1[12].apic[2]',  'GC5[226].apic[0]',  'GC3[126].apic[8]',  \
-                                                                                    #            'GC3[150].apic[1]',  'GC3[34].apic[3]',  'GC3[100].apic[0]',  \
-                                                                                    #                'GC3[24].apic[9]',  'GC3[154].apic[7]',  'GC3[78].apic[3]',  \
-                                                                                    ##                    'GC1[202].apic[7]',  'GC1[146].apic[8]',  'GC5[188].apic[7]', \
-                                                                                    #                          'GC3[242].apic[2]',  'GC3[236].apic[2]',  'GC3[94].apic[5]', \
-                                                                                    #                              'GC3[166].apic[4]',  'GC3[50].apic[8]',  'GC3[188].apic[2]',  \
-                                                                                    #                                'GC1[26].apic[8]',  'GC5[12].apic[6]',  'GC3[180].apic[1]',  \
-                                                                                    #                                    'GC1[48].apic[8]',  'GC3[210].apic[2]',  'GC5[110].apic[1]', \
-                                                                                    #                                          'GC3[24].apic[7]',  'GC3[232].apic[5]',  'GC3[240].apic[2]', \
-                                                                                    #                                              'GC3[28].apic[2]',  'GC5[146].apic[0]',  'GC5[192].apic[3]', \
-                                                                                    #                                                  'GC1[204].apic[8]',  'GC3[96].apic[8]',  'GC1[32].apic[2]', \
-                                                                                    #                                                      'GC3[98].apic[7]',  'GC3[92].apic[8]',  'GC3[54].apic[3]',  \
-                                                                                    #                                                        'GC3[182].apic[2]',  'GC3[68].apic[8]',  'GC3[188].apic[7]', \
-                                                                                    #                                                             'GC5[212].apic[5]',  'GC3[178].apic[7]',  'GC1[26].apic[4]',\
-                                                                                    #                                                                  'GC1[142].apic[8]',  'GC5[192].apic[4]'] #100
+        centrif_inputsegs = get_random_apics(n_segs=50)
                                         
         print("len(centrif_inputsegs):", len(centrif_inputsegs))
     
@@ -199,7 +167,7 @@ class OlfactoryBulb:
             self.add_inputs(odor=odor_info["name"], t=time, rel_conc=odor_info["rel_conc"])
             print("between add_inputs and add_centrif")
         
-        self.add_centrifugal_inputs(centrif_inputsegs=centrif_inputsegs, t=40)
+        self.add_centrifugal_inputs(centrif_inputsegs=centrif_inputsegs)
         
         
         # LFP
@@ -877,7 +845,7 @@ class OlfactoryBulb:
         return gc_input_segs
 
 
-    def add_centrifugal_inputs(self, centrif_inputsegs, t):
+    def add_centrifugal_inputs(self, centrif_inputsegs):
         """
         Add centrifugal input to GCs using assigned ranks.
 
@@ -887,6 +855,7 @@ class OlfactoryBulb:
         h = self.h
 
         centrif_duration = 1800
+        centrif_delay = 80
         setup_time = self.params.sim_setup_time
 
         gc_input_segs = self.assign_centrif_ranks(centrif_inputsegs)  # Get formatted segment info
@@ -895,13 +864,39 @@ class OlfactoryBulb:
             print("No valid GC segments found for centrifugal input.")
             return
 
-        print("Stimulating GCs at time", t)
+        print("Stimulating GCs with delay", centrif_delay, "ms")
 
         for seg_address, single_rank_gid, single_rank_address in gc_input_segs:
             try:
                 seg = eval(seg_address.replace('(1)', '(.999)'))
-            exc gsinusoi
+            except IndexError:
+                print(f"Segment {seg_address} does not exist. Skipping.")
+                continue
+
+            syn = self.h.Exp2Syn(seg)
+            syn.tau1 = self.params.input_syn_tau1
+            syn.tau2 = self.params.input_syn_tau2
+            centrif_delay = 80
+            centrif_weight = 0.9
+            spike_times = self.get_constant_spike_train(start_time=centrif_delay, duration=centrif_duration, frequency=5, jitter=20)
+            base_frequency = 20  # Hz (gamma-range firing)
+            mod_frequency = 5  # Hz (sniff-driven modulation)
+            #spike_times = self.get_sinusoidal_spike_train(setup_time, centrif_duration, \
+            #                                              base_frequency=base_frequency, mod_frequency=mod_frequency, \
+            #                                                amplitude=20, jitter=20, phase_offset=np.pi)
+            #spike_times_doubled = self.double_up_spikes_with_offset(spike_times, offset=0.001)
+            print("spike_times:", spike_times)
+            ns = self.h.VecStim()
+            ns.play(self.h.Vector(spike_times))
+
+            netcon = self.h.NetCon(ns, syn, 0, 0, centrif_weight)
+            input_vec = self.h.Vector()
+            netcon.record(input_vec)
+
+            self.gc_input_vectors.append((seg_address, input_vec))
+            self.gc_inputs.append((syn, ns, netcon))
     
+
     def load_cells(self, cell_type):
         """
         Load the cells of the specified type onto least busy MPI ranks.
