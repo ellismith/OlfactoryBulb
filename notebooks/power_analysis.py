@@ -11,10 +11,11 @@ import os
 import yaml
 from pylab import * 
 from scipy import signal
-from scipy.signal import welch, get_window
+from scipy.signal import find_peaks, welch, get_window
 #from scipy.signal import ShortTimeFFT
 import matplotlib.ticker as tkr
 from plot_help import mix_colors
+from load import *
 
 
 ############### POWER ANALYSIS #################
@@ -65,82 +66,6 @@ def calculate_power_psd(signal, fs, window_size=1024, step_size=256, freq_range=
     
     return power, freqs, psd
 
-def plot_power_over_time_multiple_signals(signals, dt_ms, window_size=1024, step_size=256, freq_range=(15, 200), colors=None, labels=None):
-    """
-    Compute and plot power over time for multiple signals using Welch’s method.
-    
-    Parameters:
-    - signals: List of 1D NumPy arrays, input signals.
-    - dt_ms: Time step in milliseconds.
-    - window_size: Number of samples per window.
-    - step_size: Step size between windows (smaller = better resolution).
-    - freq_range: Frequency range of interest (default: 15-200 Hz).
-    - colors: List of colors to use for each signal's plot.
-    - labels: List of labels for the legend.
-    """
-    fs = 1000.0 / dt_ms  # Convert dt from ms to Hz
-    n_samples = len(signals[0])
-    times = np.arange(0, n_samples - window_size, step_size) * dt_ms / 1000  # Convert to seconds
-
-    # Plot for each signal
-    plt.figure(figsize=(12, 8))
-
-    for i, signal in enumerate(signals):
-        power_over_time = []
-
-        for start in range(0, n_samples - window_size, step_size):
-            segment = signal[start:start + window_size]
-            power, freqs, psd = calculate_power_psd(segment, fs, window_size=window_size, step_size=step_size, freq_range=freq_range)
-            power_over_time.append(power)
-
-        power_over_time = np.array(power_over_time)
-
-        # Plot the power for this signal
-        color = colors[i] if colors else f"C{i}"  # Default to matplotlib color cycle if no colors provided
-        label = labels[i] if labels else f'Signal {i+1}'  # Use provided label or default label
-        plt.plot(times, power_over_time, color=color, label=label)
-
-    plt.xlabel("Time (s)")
-    plt.ylabel("Power (V²/Hz)")
-    plt.title("Power Over Time  - Welch Method", size=16)
-    plt.legend()  # Display the legend
-    plt.show()
-
-
-def calculate_psd_and_dominant_frequency(signal, dt_ms, freq_range=(15, 200), nperseg=1024):
-    """
-    Compute the power spectral density and dominant frequency in a given range 
-    - calculate_dominant_frequency_power uses Welch’s method (scipy.signal.welch) to compute the PSD
-    - It calculates power at different frequencies and identifies the dominant frequency (i.e., the frequency with the highest power).
-    - It filters the frequencies within a specific range (15-200 Hz by default)
-
-    Parameters:
-    - signal: 1D NumPy array, input signal.
-    - dt_ms: Time step in milliseconds.
-    - freq_range: Tuple (low, high) specifying the frequency range to analyze.
-
-    Returns:
-    - freqs_filtered: Frequencies within the specified range.
-    - psd_filtered: Power spectral density within the range.
-    - dom_freq: Dominant frequency within the range.
-    - dom_power: Power at the dominant frequency.
-    """
-    fs = 1000.0 / dt_ms  # Convert dt from ms to Hz
-    
-    # Compute power spectral density using Welch's method
-    freqs, psd = welch(signal, fs=fs, nperseg=nperseg, noverlap=nperseg//2)
-
-    # Extract only the desired frequency range
-    valid_idx = np.logical_and(freqs >= freq_range[0], freqs <= freq_range[1])
-    freqs_filtered = freqs[valid_idx]
-    psd_filtered = psd[valid_idx]
-
-    # Find dominant frequency in the filtered range
-    dom_freq_idx = np.argmax(psd_filtered)
-    dom_freq = freqs_filtered[dom_freq_idx]
-    dom_power = psd_filtered[dom_freq_idx]
-
-    return freqs_filtered, psd_filtered, dom_freq, dom_power
 
 
 def calculate_fft_spectrum(signal, dt_ms, freq_range=(15, 200)):
@@ -191,7 +116,382 @@ def calculate_fft_spectrum(signal, dt_ms, freq_range=(15, 200)):
     return freqs_filtered, fft_power_filtered, dom_freq, dom_power
 
 
-def plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers, labels=None, colors=None):
+def calculate_psd_and_dominant_frequency(signal, dt_ms, freq_range=(15, 200), nperseg=1024):
+    """
+    Compute the power spectral density and dominant frequency in a given range. 
+    Additionally, identify all peak frequencies and their corresponding power.
+
+    Parameters:
+    - signal: 1D NumPy array, input signal.
+    - dt_ms: Time step in milliseconds.
+    - freq_range: Tuple (low, high) specifying the frequency range to analyze.
+    - nperseg: Length of each segment for Welch's method (default: 1024).
+
+    Returns:
+    - freqs_filtered: Frequencies within the specified range.
+    - psd_filtered: Power spectral density within the range.
+    - dom_freq: Dominant frequency (frequency with the maximum power).
+    - dom_power: Power at the dominant frequency.
+    - peak_freqs: List of frequencies corresponding to all peaks in the PSD.
+    - peak_powers: List of power values corresponding to all peaks in the PSD.
+    """
+    # Sampling frequency in Hz
+    fs = 1000.0 / dt_ms  
+    
+    # Compute power spectral density using Welch's method
+    freqs, psd = welch(signal, fs=fs, nperseg=nperseg, noverlap=nperseg//2)
+
+    # Extract the desired frequency range
+    valid_idx = np.logical_and(freqs >= freq_range[0], freqs <= freq_range[1])
+    freqs_filtered = freqs[valid_idx]
+    psd_filtered = psd[valid_idx]
+
+    # Identify all peaks in the PSD within the range
+    peaks_idx, _ = find_peaks(psd_filtered)
+    peak_freqs = freqs_filtered[peaks_idx]
+    peak_powers = psd_filtered[peaks_idx]
+
+    # Find the dominant frequency (the one with the maximum power)
+    if len(psd_filtered) > 0:
+        dom_freq_idx = np.argmax(psd_filtered)
+        dom_freq = freqs_filtered[dom_freq_idx]
+        dom_power = psd_filtered[dom_freq_idx]
+    else:
+        dom_freq = None
+        dom_power = None
+
+    return freqs_filtered, psd_filtered, dom_freq, dom_power, peak_freqs, peak_powers
+
+
+
+def calculate_average_power(lfp_bp_beta, lfp_bp_gamma, t, dt_ms, method="full_time", sniff_rate=5, sniff_count=9, setup_time=50, inhale_duration=125):
+    """
+    Calculate the average power, amplitude, dominant frequency, and peak details for beta and gamma bands.
+
+    Parameters:
+    - lfp_bp_beta, lfp_bp_gamma: The LFP data for beta and gamma bands.
+    - t: Time vector.
+    - dt_ms: Time step in milliseconds.
+    - method: Either "full_time" for entire simulation or "during_inhale" for inhale periods.
+    - sniff_rate: The rate of sniffs (Hz).
+    - sniff_count: The number of sniffs.
+    - setup_time: Initial delay before sniffs start (ms).
+    - inhale_duration: Duration of the inhale period for each sniff (ms).
+
+    Returns:
+    - avg_beta_power: Average power in the beta band.
+    - avg_gamma_power: Average power in the gamma band.
+    - avg_beta_amplitude: Average amplitude in the beta band (based on raw signal).
+    - avg_gamma_amplitude: Average amplitude in the gamma band (based on raw signal).
+    - dominant_beta_freq: Dominant frequency in the beta band.
+    - dominant_gamma_freq: Dominant frequency in the gamma band.
+    - beta_peaks: List of all peak frequencies and their powers in the beta band.
+    - gamma_peaks: List of all peak frequencies and their powers in the gamma band.
+    """
+    
+
+    # Define frequency ranges for beta and gamma bands
+    beta_freq_range = (15, 40)  # 15-40 Hz for beta
+    gamma_freq_range = (30, 120)  # 30-120 Hz for gamma
+
+    # Initialize outputs
+    avg_beta_power, avg_gamma_power = 0, 0
+    avg_beta_amplitude, avg_gamma_amplitude = 0, 0
+    dominant_beta_freq, dominant_gamma_freq = 0, 0
+    beta_peaks, gamma_peaks = [], []
+
+    if method == "full_time":
+        # Compute PSD and find peaks for the full simulation
+        freqs_beta, psd_beta, dom_beta, dom_beta_power, peak_beta_freqs, peak_beta_powers = calculate_psd_and_dominant_frequency(
+            lfp_bp_beta, dt_ms, freq_range=beta_freq_range
+        )
+        freqs_gamma, psd_gamma, dom_gamma, dom_gamma_power, peak_gamma_freqs, peak_gamma_powers = calculate_psd_and_dominant_frequency(
+            lfp_bp_gamma, dt_ms, freq_range=gamma_freq_range
+        )
+
+        avg_beta_power = np.mean(psd_beta)
+        avg_gamma_power = np.mean(psd_gamma)
+
+        # Average amplitude based on raw signal
+        avg_beta_amplitude = np.mean(np.abs(lfp_bp_beta))
+        avg_gamma_amplitude = np.mean(np.abs(lfp_bp_gamma))
+
+        dominant_beta_freq = dom_beta
+        dominant_gamma_freq = dom_gamma
+        beta_peaks = list(zip(peak_beta_freqs, peak_beta_powers))
+        gamma_peaks = list(zip(peak_gamma_freqs, peak_gamma_powers))
+
+    elif method == "during_inhale":
+        # Calculate inhale periods
+        sniff_duration = int(1000 / sniff_rate)
+        inhale_times = []
+        for i in range(sniff_count):
+            sniff_start_time = setup_time + i * sniff_duration
+            inhale_start_time = sniff_start_time
+            inhale_end_time = inhale_start_time + inhale_duration
+            inhale_end_time = min(inhale_end_time, t[-1])
+            inhale_times.append((inhale_start_time, inhale_end_time))
+
+        # Create a mask for inhale periods
+        inhale_mask = np.zeros(len(t), dtype=bool)
+        for inhale_start, inhale_end in inhale_times:
+            inhale_mask |= (t >= inhale_start) & (t < inhale_end)
+
+        # Extract data during inhale periods
+        lfp_bp_beta_inhale = lfp_bp_beta[inhale_mask]
+        lfp_bp_gamma_inhale = lfp_bp_gamma[inhale_mask]
+
+        # Compute PSD and find peaks for inhale periods
+        freqs_beta, psd_beta_inhale, dom_beta, dom_beta_power, peak_beta_freqs, peak_beta_powers = calculate_psd_and_dominant_frequency(
+            lfp_bp_beta_inhale, dt_ms, freq_range=beta_freq_range
+        )
+        freqs_gamma, psd_gamma_inhale, dom_gamma, dom_gamma_power, peak_gamma_freqs, peak_gamma_powers = calculate_psd_and_dominant_frequency(
+            lfp_bp_gamma_inhale, dt_ms, freq_range=gamma_freq_range
+        )
+
+        avg_beta_power = np.mean(psd_beta_inhale)
+        avg_gamma_power = np.mean(psd_gamma_inhale)
+
+        # Average amplitude during inhale periods
+        avg_beta_amplitude = np.mean(np.abs(lfp_bp_beta_inhale))
+        avg_gamma_amplitude = np.mean(np.abs(lfp_bp_gamma_inhale))
+
+        dominant_beta_freq = dom_beta
+        dominant_gamma_freq = dom_gamma
+        beta_peaks = list(zip(peak_beta_freqs, peak_beta_powers))
+        gamma_peaks = list(zip(peak_gamma_freqs, peak_gamma_powers))
+
+    # Return calculated metrics
+    return (
+        avg_beta_power,
+        avg_gamma_power,
+        avg_beta_amplitude,
+        avg_gamma_amplitude,
+        dominant_beta_freq,
+        dominant_gamma_freq,
+        beta_peaks,
+        gamma_peaks,
+    )
+
+
+
+def calculate_average_power_in_range(lfp_signal, dt_ms, freq_range=(15, 40), nperseg=1024):
+    # delete
+    """
+    Calculate the average power in the specified frequency range for the given LFP signal.
+    
+    Parameters:
+    - lfp_signal: 1D array of LFP signal.
+    - dt_ms: Time step in milliseconds.
+    - freq_range: Tuple (low, high) specifying the frequency range to analyze.
+    - nperseg: Number of samples per segment for the PSD calculation (default: 1024).
+    
+    Returns:
+    - average_power: Average power in the frequency range.
+    """
+    _, psd_filtered, _, _ = calculate_psd_and_dominant_frequency(lfp_signal, dt_ms, freq_range, nperseg)
+    average_power = np.mean(psd_filtered)
+    return average_power
+
+
+
+def calculate_power_during_inhale_periods(lfp_signal, dt_ms, sniff_duration, inhale_duration, sniff_count, freq_range=(15, 40), nperseg=1024):
+    # delete
+    """
+    Calculate the average power during inhale periods of each sniff in the given frequency range.
+    
+    Parameters:
+    - lfp_signal: 1D array of LFP signal.
+    - dt_ms: Time step in milliseconds.
+    - sniff_duration: Total duration of one sniff.
+    - inhale_duration: Duration of inhale period.
+    - sniff_count: Total number of sniffs.
+    - freq_range: Tuple (low, high) specifying the frequency range to analyze.
+    - nperseg: Number of samples per segment for the PSD calculation (default: 1024).
+    
+    Returns:
+    - average_inhale_power: Average power in the frequency range during inhale periods of each sniff.
+    """
+    inhale_power_list = []
+    for i in range(sniff_count):
+        start_time = i * sniff_duration
+        setup_time = 50
+        inhale_start_time = start_time + setup_time  # Delay for setup_time before inhale
+        inhale_end_time = inhale_start_time + inhale_duration  # End of inhale period
+        
+        # Extract the segment of the signal corresponding to the inhale period
+        inhale_signal = lfp_signal[int(inhale_start_time / dt_ms): int(inhale_end_time / dt_ms)]
+        
+        # Calculate power during inhale period
+        inhale_power = calculate_average_power_in_range(inhale_signal, dt_ms, freq_range, nperseg)
+        inhale_power_list.append(inhale_power)
+    
+    # Return the average power across all inhale periods
+    average_inhale_power = np.mean(inhale_power_list)
+    return average_inhale_power
+
+
+def plot_power_or_psd(signals, dt_ms, window_size=1024, step_size=256, freq_range=(15, 200),
+                      colors=None, labels=None, mode='time'):
+    """
+    Plot either power over time or power spectral density (PSD) for multiple signals.
+    
+    Parameters:
+    - signals: List of 1D NumPy arrays, input signals.
+    - dt_ms: Time step in milliseconds.
+    - window_size: Window size (samples) for Welch's method.
+    - step_size: Step size between windows (only relevant for 'time' mode).
+    - freq_range: Tuple of (min_freq, max_freq) to consider.
+    - colors: List of colors for each signal.
+    - labels: List of labels for each signal.
+    - mode: 'time' to plot power over time; 'psd' to plot PSD.
+    """
+    fs = 1000.0 / dt_ms
+    n_samples = len(signals[0])
+
+    plt.figure(figsize=(12, 8))
+
+    for i, signal in enumerate(signals):
+        color = colors[i] if colors else f"C{i}"
+        label = labels[i] if labels else f'Signal {i+1}'
+
+        if mode == 'time':
+            power_over_time = []
+            times = np.arange(0, n_samples - window_size, step_size) * dt_ms / 1000  # in seconds
+
+            for start in range(0, n_samples - window_size, step_size):
+                segment = signal[start:start + window_size]
+                freqs, psd = welch(segment, fs=fs, nperseg=window_size, noverlap=window_size//2)
+                freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
+                power = np.sum(psd[freq_mask])
+                power_over_time.append(power)
+
+            plt.plot(times, power_over_time, color=color, label=label)
+            plt.xlabel("Time (s)")
+            plt.ylabel("Power (V²/Hz)")
+            plt.title("Power Over Time – Welch Method")
+
+        elif mode == 'psd':
+            freqs, psd = welch(signal, fs=fs, nperseg=window_size, noverlap=window_size//2)
+            freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
+            plt.plot(freqs[freq_mask], psd[freq_mask], color=color, label=label)
+            plt.xlabel("Frequency (Hz)")
+            plt.ylabel("Power Spectral Density (V²/Hz)")
+            plt.title("Power Spectral Density – Welch Method")
+
+        else:
+            raise ValueError("Invalid mode. Choose 'time' or 'psd'.")
+
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_beta_gamma_comparison(paramsets, method="full_time", metric="power"):
+    """
+    Plot comparisons between beta and gamma bands across paramsets for a selected metric.
+    
+    Parameters:
+    - paramsets: List of parameter sets to compare
+    - method: Either "full_time" or "during_inhale" (calculation method)
+    - metric: Metric to plot ("power", "amplitude", or "dominant_frequency")
+    """
+    # Load the results for each paramset
+    lfp_bp_beta_all, lfp_bp_gamma_all, t_all = load_results_for_comparison(paramsets)
+
+    # Initialize lists to store selected metric values
+    beta_values = []
+    gamma_values = []
+
+    # Calculate selected metrics for each paramset
+    for i in range(len(paramsets)):
+        avg_beta_power, avg_gamma_power, avg_beta_amplitude, avg_gamma_amplitude, dominant_beta_freq, dominant_gamma_freq, beta_peaks, gamma_peaks = calculate_average_power(
+            lfp_bp_beta_all[i], lfp_bp_gamma_all[i], t_all[i], dt_ms=0.1, method=method)
+
+        # Select metric to plot
+        if metric == "power":
+            beta_values.append(avg_beta_power)
+            gamma_values.append(avg_gamma_power)
+        elif metric == "amplitude":
+            beta_values.append(avg_beta_amplitude)
+            gamma_values.append(avg_gamma_amplitude)
+        elif metric == "dominant_frequency":
+            beta_values.append(dominant_beta_freq)
+            gamma_values.append(dominant_gamma_freq)
+
+    # Plot the selected metric
+    plt.figure(figsize=(10, 6))
+    for i in range(len(paramsets)):
+        plt.scatter(i, beta_values[i], color='blue', label='Beta' if i == 0 else "")
+        plt.scatter(i, gamma_values[i], color='green', label='Gamma' if i == 0 else "")
+
+    # Customize the plot
+    plt.xlabel("Paramset Index")
+    plt.ylabel(f"Average {metric.capitalize()}")
+    plt.title(f"Comparison of Beta and Gamma {metric.capitalize()} Across Paramsets ({method})")
+    plt.xticks(range(len(paramsets)), paramsets, rotation=0)
+    #plt.legend(loc="upper left")
+    plt.grid(True)
+
+    # Show the plot
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_one_beta_gamma_comparison(lfp_bp_beta, lfp_bp_gamma, t, dt_ms, sniff_rate=5, sniff_count=9, setup_time=50, inhale_duration=125, metric="power"):
+    """
+    Plot comparisons between beta and gamma bands for both full time and during inhale for a selected metric.
+
+    Parameters:
+    - metric: Metric to plot ("power", "amplitude", or "dominant_frequency")
+    """
+    methods = ["full_time", "during_inhale"]
+    beta_values = []
+    gamma_values = []
+
+    for method in methods:
+        # Calculate metrics for each method
+        avg_beta_power, avg_gamma_power, avg_beta_amplitude, avg_gamma_amplitude, dominant_beta_freq, dominant_gamma_freq, beta_peaks, gamma_peaks = calculate_average_power(
+            lfp_bp_beta, lfp_bp_gamma, t, dt_ms, method=method,
+            sniff_rate=sniff_rate, sniff_count=sniff_count,
+            setup_time=setup_time, inhale_duration=inhale_duration
+        )
+
+        # Store selected metric
+        if metric == "power":
+            beta_values.append(avg_beta_power)
+            gamma_values.append(avg_gamma_power)
+        elif metric == "amplitude":
+            beta_values.append(avg_beta_amplitude)
+            gamma_values.append(avg_gamma_amplitude)
+        elif metric == "dominant_frequency":
+            beta_values.append(dominant_beta_freq)
+            gamma_values.append(dominant_gamma_freq)
+
+    # Plot both comparisons side by side
+    fig, axes = plt.subplots(1, 2, figsize=(5, 8), sharey=True)
+    colors = ['blue', 'green']
+
+    for idx, method in enumerate(methods):
+        ax = axes[idx]
+        ax.scatter(0, beta_values[idx], color=colors[0], label='Beta')
+        ax.scatter(1, gamma_values[idx], color=colors[1], label='Gamma')
+        ax.set_title(f"{method.replace('_', ' ').capitalize()}")
+        ax.set_xticks([0, 1])
+        ax.set_xticklabels(['Beta', 'Gamma'])
+        ax.set_ylabel(f"{metric.capitalize()}")
+        ax.grid(True)
+        if idx == 1:
+            ax.legend(loc='upper right')
+
+    plt.suptitle(f"Comparison of Beta and Gamma {metric.capitalize()} (Full vs Inhale)", fontsize=14)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
+
+
+
+
+def plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers, labels=None, colors=None, xlim=None):
     """
     Plot power spectral densities for multiple signals with different colors and 
     mark dominant frequencies with vertical lines.
@@ -203,6 +503,7 @@ def plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers, labels=None,
     - dom_powers: List of power values at dominant frequencies.
     - labels: List of labels for each spectrum.
     - colors: List of colors for each spectrum.
+    - xlim: Tuple specifying the x-axis limits (e.g., (low, high)).
     """
     # Set font size globally
     plt.rcParams.update({'font.size': 16})
@@ -216,12 +517,14 @@ def plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers, labels=None,
 
     for freqs, psd, dom_freq, dom_power, label, color in zip(freqs_list, psd_list, dom_freqs, dom_powers, labels, colors):
         plt.plot(freqs, psd, label=label, color=color)
-        #plt.axvline(dom_freq, color=color, linestyle="--", alpha=0.7)  # Vertical line for dominant frequency
-        #plt.scatter([dom_freq], [dom_power], color=color, edgecolor='black', zorder=3)  # Highlight peak
 
     plt.xlabel("Frequency (Hz)")
     plt.ylabel("Power (V²/Hz)")
-    plt.title("Power Spectrum (130-200 Hz)")
+    plt.title("Power Spectrum")
+
+    if xlim is not None:
+        plt.xlim(xlim)
+
     plt.legend()
     plt.show()
 
@@ -318,34 +621,6 @@ def plot_lfp_power_welch(paramset, default = "GammaSignature_SetupTime"):
     plt.show()
 
 
-def get_power_f_range(paramset, f_min, f_max, nperseg=2000):
-    # for a time step of 0.1 ms = 0.0001 s, fs is 10000 Hz, t_lfp.shape is (17999,)
-    # nperseg= length of each segment
-    # from the welch PSD
-    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
-        params_dict = yaml.load(f, Loader=yaml.FullLoader)
-
-    dt = params_dict['dt']    # in ms
-    dt_in_sec = dt*0.001      # dt in ms to seconds
-    assert 1/dt_in_sec == 10000
-    sniff_count = params_dict['sniff_count']
-
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
-
-    f, psd = signal.welch(lfp, fs=1/dt_in_sec, nperseg=nperseg)
-
-    #Find the indices corresponding to the frequency range of interest (130 to 180 Hz)
-    freq_index_start = np.argmax(f >= f_min)  # Find index where frequency >= 130 Hz
-    freq_index_end = np.argmax(f >= f_max) + 1  # Find index where frequency >= 180 Hz, add 1 to include 180 Hz
-
-    # Calculate the total power within the specified frequency band
-    power_f_range = np.sum(psd[freq_index_start:freq_index_end])
-
-    return power_f_range
-
-
 def plot_powers_across_paramsets(paramsets, freq_ranges):
     fig, axs = plt.subplots(3, 1, figsize=(15, 20))  # 3 subplots for different frequency ranges
     fontsize = 14
@@ -374,6 +649,7 @@ def plot_powers_across_paramsets(paramsets, freq_ranges):
     plt.tight_layout()
 
     plt.show();
+
 
 
 def plot_psd(f, psd):
@@ -431,6 +707,32 @@ def plot_power_hfo(paramsets):
 
 
 
+def get_power_f_range(paramset, f_min, f_max, nperseg=2000):
+    # for a time step of 0.1 ms = 0.0001 s, fs is 10000 Hz, t_lfp.shape is (17999,)
+    # nperseg= length of each segment
+    # from the welch PSD
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
+        params_dict = yaml.load(f, Loader=yaml.FullLoader)
+
+    dt = params_dict['dt']    # in ms
+    dt_in_sec = dt*0.001      # dt in ms to seconds
+    assert 1/dt_in_sec == 10000
+    sniff_count = params_dict['sniff_count']
+
+    events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+
+    f, psd = signal.welch(lfp, fs=1/dt_in_sec, nperseg=nperseg)
+
+    #Find the indices corresponding to the frequency range of interest (130 to 180 Hz)
+    freq_index_start = np.argmax(f >= f_min)  # Find index where frequency >= 130 Hz
+    freq_index_end = np.argmax(f >= f_max) + 1  # Find index where frequency >= 180 Hz, add 1 to include 180 Hz
+
+    # Calculate the total power within the specified frequency band
+    power_f_range = np.sum(psd[freq_index_start:freq_index_end])
+
+    return power_f_range
 
 def plot_lfp_wavelet_power(paramset):
 
@@ -465,8 +767,3 @@ def plot_lfp_wavelet_power(paramset):
 
     plt.savefig(f"{fig_dir}/lfp_power.pdf")
     plt.show()
-
-
-
-
-
