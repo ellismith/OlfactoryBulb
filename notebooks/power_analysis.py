@@ -529,6 +529,29 @@ def plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers, labels=None,
     plt.show()
 
 
+def plot_psd_diff_ranges(paramset):
+    events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+    
+    signals = [lfp, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo]
+    freqs_list, psd_list, dom_freqs, dom_powers = [], [], [], []
+
+    for sig in signals:
+        freqs_filtered, psd_filtered, dom_freq, dom_power, \
+            peak_freqs, peak_powers = calculate_psd_and_dominant_frequency(sig, dt, nperseg=2048)
+        freqs_list.append(freqs)
+        psd_list.append(psd)
+        dom_freqs.append(dom_freq)
+        dom_powers.append(dom_power)
+
+    plot_power_spectra(freqs_list, psd_list, dom_freqs, dom_powers,  \
+                    labels=["LFP (<200 Hz) PSD", \
+                            "Beta (15-40 Hz) bandpassed LFP PSD", \
+                                "Gamma (30-120 Hz bandpassed LFP PSD)",\
+                                "HFO (130-200 Hz bandpassed LFP PSD)"], \
+                        colors=["black", "blue", "green", "red"])
+
+
 
 def get_csd(f, psd):
 
@@ -621,34 +644,37 @@ def plot_lfp_power_welch(paramset, default = "GammaSignature_SetupTime"):
     plt.show()
 
 
-def plot_powers_across_paramsets(paramsets, freq_ranges):
+def plot_powers_across_paramsets(paramsets, freq_ranges, sort_by_power=True):
     fig, axs = plt.subplots(3, 1, figsize=(15, 20))  # 3 subplots for different frequency ranges
     fontsize = 14
+
     for idx, (f_min, f_max) in enumerate(freq_ranges):
 
         powers_f_range = []
         for paramset in paramsets:
-            power_f_range = get_power_f_range(paramset, f_min = f_min, f_max = f_max)
+            power_f_range = get_power_f_range(paramset, f_min=f_min, f_max=f_max)
             powers_f_range.append(power_f_range)
 
-        # Sort data based on values
-        sorted_indices = np.argsort(powers_f_range)[::-1]  # Get indices that would sort values in descending order
-        sorted_paramsets = [paramsets[i] for i in sorted_indices]
+        if sort_by_power:
+            sorted_indices = np.argsort(powers_f_range)[::-1]  # Descending order
+            sorted_paramsets = [paramsets[i] for i in sorted_indices]
+            sorted_powers = [powers_f_range[i] for i in sorted_indices]
+        else:
+            sorted_paramsets = paramsets
+            sorted_powers = powers_f_range
 
-        # Rename "GammaSignature_SetupTime" paramset to "Control"
-        sorted_paramsets = ['Control' if param == 'GammaSignature_SetupTime' else param for param in sorted_paramsets]
+        # Replace label for control
+        sorted_labels = ['Control' if param == 'GammaSignature_SetupTime' else param for param in sorted_paramsets]
+        colors = ['black' if label == 'Control' else 'gray' for label in sorted_labels]
 
-        sorted_powers = [powers_f_range[i] for i in sorted_indices]
-
-        colors = ['black' if param == 'Control' else 'gray' for param in sorted_paramsets]
-
-        axs[idx].bar(sorted_paramsets, sorted_powers, color=colors)
-        axs[idx].set_ylabel("Power in %i to %i Hz range" % (f_min, f_max), fontsize=fontsize)
-        axs[idx].set_xticklabels(sorted_paramsets, rotation=45, fontsize=16, ha='center')
+        axs[idx].bar(sorted_labels, sorted_powers, color=colors)
+        axs[idx].set_ylabel(f"Power in {f_min} to {f_max} Hz range", fontsize=fontsize)
+        axs[idx].tick_params(axis='x', labelsize=16)
+        axs[idx].set_xticklabels(sorted_labels, rotation=45, ha='center')
 
     plt.tight_layout()
+    plt.show()
 
-    plt.show();
 
 
 
