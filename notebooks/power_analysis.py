@@ -387,7 +387,7 @@ def plot_power_or_psd(signals, dt_ms, window_size=1024, step_size=256, freq_rang
     plt.show()
 
 
-def plot_beta_gamma_comparison(paramsets, labels, method="full_time", metric="power"):
+def plot_beta_gamma_comparison(paramsets, labels, params, label_with, method="full_time", metric="power"):
     """
     Plot comparisons between beta and gamma bands across paramsets for a selected metric.
     
@@ -419,6 +419,8 @@ def plot_beta_gamma_comparison(paramsets, labels, method="full_time", metric="po
             beta_values.append(dominant_beta_freq)
             gamma_values.append(dominant_gamma_freq)
 
+    plt.figure(figsize=(12, 6))
+    
     # Plot the first data point with a special marker
     plt.scatter(0, beta_values[0], color='blue', marker='s', s=100, label='Beta (first)')
     plt.scatter(0, gamma_values[0], color='green', marker='s', s=100, label='Gamma (first)')
@@ -428,10 +430,11 @@ def plot_beta_gamma_comparison(paramsets, labels, method="full_time", metric="po
     plt.plot(range(1, len(paramsets)), gamma_values[1:], color='green', marker='o', label='Gamma')
     
     # Customize the plot
-    plt.xlabel("Paramset Index")
-    plt.ylabel(f"Average {metric.capitalize()}")
-    plt.title(f"Comparison of Beta and Gamma {metric.capitalize()} Across Paramsets ({method})", pad=20)
-    plt.xticks(range(len(paramsets)), labels, rotation=0)
+    plt.xlabel(f"{label_with.capitalize()}", size=16)
+    plt.ylabel(f"Average {metric.capitalize()}", size=16)
+    plt.title(f"Comparison of Beta and Gamma {metric.capitalize()} Across Paramsets ({method}),\n{params}", pad=20, size=16)
+    plt.xticks(range(len(paramsets)), labels, rotation=0, size=16)
+    plt.yticks(size=16)
     #plt.legend(loc="upper left")
     plt.grid(True)
 
