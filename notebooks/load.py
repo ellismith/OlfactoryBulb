@@ -311,6 +311,46 @@ def load_results_for_comparison(paramsets):
     return lfp_bp_beta_all, lfp_bp_gamma_all, t_all
 
 
+def get_labels(paramsets, label_with='delay'):
+    labels = []
+    for p in paramsets:
+        if p == 'GammaSignature_SetupTime':
+            labels.append("Control")
+        else:
+            parts = p.split("_")
+            if label_with == 'delay':
+                delay = [s for s in parts if "delay" in s][-1].replace("delay", "")
+                labels.append(delay)
+            elif label_with == 'weight':
+                weight = [s for s in parts if "weight" in s][0].replace("pt", ".").replace("weight", "")
+                labels.append(weight)
+            elif label_with == 'jitter':
+                jitter = [s for s in parts if "jitter" in s][0].replace("jitter", "")
+                labels.append(jitter)
+            elif label_with == 'n_segs':
+                segs = [s for s in parts if "segs" in s][0].replace("segs", "")
+                labels.append(segs)
+    return labels
+
+
+def generate_paramsets(n_segs=50, delay=60, jitter=20, weight=None):
+    # Normalize weight input to a list of floats
+    if weight is None:
+        weight = [i / 10 for i in range(1, 10)]  # 0.1 to 0.9
+    elif isinstance(weight, (float, int)):
+        weight = [weight]
+
+    paramsets = []
+    for w in weight:
+        # Convert 0.5 -> "pt5weight"
+        decimal_part = str(w).split(".")[1]
+        w_str = f"pt{decimal_part}weight"
+        paramset = f"Centrif_{n_segs}segs_{w_str}_{delay}delay_jitter{jitter}"
+        paramsets.append(paramset)
+    return paramsets
+
+
+
 def get_cell_info(events):
 
     events_ = [(seg, times) for seg, times in events.items()]
