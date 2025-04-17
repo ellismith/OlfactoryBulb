@@ -311,44 +311,73 @@ def load_results_for_comparison(paramsets):
     return lfp_bp_beta_all, lfp_bp_gamma_all, t_all
 
 
-def get_labels(paramsets, label_with='delay'):
+def get_labels(paramsets, label_with):
+    """
+    Generate labels for a list of parameter set names based on a specified varying parameter.
+
+    Parameters:
+    - paramsets: List of strings, each representing a simulation condition (e.g., file or folder names)
+    - label_with: The parameter to label each entry by. Options: 'delay', 'weight', 'jitter', 'n_segs'
+
+    Returns:
+    - labels: A list of strings to use as x-axis labels, e.g., '60ms', '0.5', etc.
+    """
     labels = []
+
+    # Loop over all paramsets and extract the corresponding value to label by
     for p in paramsets:
         if p == 'GammaSignature_SetupTime':
-            labels.append("Control")
-        else:
-            parts = p.split("_")
-            if label_with == 'delay':
-                delay = [s for s in parts if "delay" in s][-1].replace("delay", "")
-                labels.append(delay)
-            elif label_with == 'weight':
-                weight = [s for s in parts if "weight" in s][0].replace("pt", ".").replace("weight", "")
-                labels.append(weight)
-            elif label_with == 'jitter':
-                jitter = [s for s in parts if "jitter" in s][0].replace("jitter", "")
-                labels.append(jitter)
-            elif label_with == 'n_segs':
-                segs = [s for s in parts if "segs" in s][0].replace("segs", "")
-                labels.append(segs)
+            labels.append("Control")  # Special label for the control condition
+            continue  # Skip further parsing for control
+
+        # Extract delay from second-to-last underscore part, strip "delay"
+        if label_with == 'delay':
+            delay = p.split("_")[-2].replace("delay", "")
+            labels.append(f"{delay}")  # e.g., '60' [ms]
+
+        # Extract weight from third-to-last underscore part, convert "pt5weight" → "0.5"
+        elif label_with == 'weight':
+            weight = p.split("_")[-3].replace("pt", "").replace("weight", "")
+            labels.append(f"0.{weight}")  # e.g., '0.5'
+
+        # Extract jitter from last underscore part, strip "jitter"
+        elif label_with == 'jitter':
+            jitter = p.split("_")[-1].replace("jitter", "")
+            labels.append(f"{jitter}")  # e.g., '20' [ms]
+
+        # Extract number of segments from prefix "Centrif50segs" → "50"
+        elif label_with == 'n_segs':
+            n_segs = p.split("_")[1].replace("segs", "")
+            labels.append(f"{n_segs}")  # e.g., '50'
+
     return labels
 
 
-def generate_paramsets(n_segs=50, delay=60, jitter=20, weight=None):
-    # Normalize weight input to a list of floats
-    if weight is None:
-        weight = [i / 10 for i in range(1, 10)]  # 0.1 to 0.9
-    elif isinstance(weight, (float, int)):
-        weight = [weight]
-
+def generate_paramsets(weight_range, delay_range, jitter_range, n_segs_range):
+    """
+    Generate valid parameter sets by iterating over specified ranges, checking which files exist in the folder.
+    """
     paramsets = []
-    for w in weight:
-        # Convert 0.5 -> "pt5weight"
-        decimal_part = str(w).split(".")[1]
-        w_str = f"pt{decimal_part}weight"
-        paramset = f"Centrif_{n_segs}segs_{w_str}_{delay}delay_jitter{jitter}"
-        paramsets.append(paramset)
+    
+    # List all files in the directory
+    cwd = os.getcwd()
+    ob_dir = os.path.dirname(cwd)
+    results_dir = os.path.join(ob_dir, 'results_newcombo4')
+    files = os.listdir(results_dir)
+    
+    for weight in weight_range:
+        for delay in delay_range:
+            for jitter in jitter_range:
+                for n_segs in n_segs_range:
+                    # Create the paramset string
+                    w_str = f"pt{int(weight*10)}weight"
+                    paramset = f"Centrif_{n_segs}segs_{w_str}_{delay}delay_jitter{jitter}"
+                    
+                    # Check if this paramset exists in the folder
+                    if any(file.startswith(paramset) for file in files):
+                        paramsets.append(paramset)
+    
     return paramsets
-
 
 
 def get_cell_info(events):
