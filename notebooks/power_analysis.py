@@ -387,7 +387,7 @@ def plot_power_or_psd(signals, dt_ms, window_size=1024, step_size=256, freq_rang
     plt.show()
 
 
-def plot_beta_gamma_comparison(paramsets, method="full_time", metric="power"):
+def plot_beta_gamma_comparison(paramsets, labels, method="full_time", metric="power"):
     """
     Plot comparisons between beta and gamma bands across paramsets for a selected metric.
     
@@ -419,23 +419,28 @@ def plot_beta_gamma_comparison(paramsets, method="full_time", metric="power"):
             beta_values.append(dominant_beta_freq)
             gamma_values.append(dominant_gamma_freq)
 
-    # Plot the selected metric
-    plt.figure(figsize=(10, 6))
-    for i in range(len(paramsets)):
-        plt.scatter(i, beta_values[i], color='blue', label='Beta' if i == 0 else "")
-        plt.scatter(i, gamma_values[i], color='green', label='Gamma' if i == 0 else "")
+    # Plot the first data point with a special marker
+    plt.scatter(0, beta_values[0], color='blue', marker='s', s=100, label='Beta (first)')
+    plt.scatter(0, gamma_values[0], color='green', marker='s', s=100, label='Gamma (first)')
 
+    # Plot the rest with lines and default marker
+    plt.plot(range(1, len(paramsets)), beta_values[1:], color='blue', marker='o', label='Beta')
+    plt.plot(range(1, len(paramsets)), gamma_values[1:], color='green', marker='o', label='Gamma')
+    
     # Customize the plot
     plt.xlabel("Paramset Index")
     plt.ylabel(f"Average {metric.capitalize()}")
-    plt.title(f"Comparison of Beta and Gamma {metric.capitalize()} Across Paramsets ({method})")
-    plt.xticks(range(len(paramsets)), paramsets, rotation=0)
+    plt.title(f"Comparison of Beta and Gamma {metric.capitalize()} Across Paramsets ({method})", pad=20)
+    plt.xticks(range(len(paramsets)), labels, rotation=0)
     #plt.legend(loc="upper left")
     plt.grid(True)
 
     # Show the plot
     plt.tight_layout()
     plt.show()
+
+
+
 
 
 def plot_one_beta_gamma_comparison(lfp_bp_beta, lfp_bp_gamma, t, dt_ms, sniff_rate=5, sniff_count=9, setup_time=50, inhale_duration=125, metric="power"):
