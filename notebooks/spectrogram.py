@@ -124,6 +124,62 @@ def plot_wavelet_stacked(t, lfp, dt, config, scale_low=1, scale_high=200, vmin=N
     plt.show()
 
 
+def plot_wavelet_stacked_paramsets(paramsets, lfp_pkl_file='lfp.pkl',
+                                   wavelet='cgau5', num_scales=50, freq_range=(20, 200),
+                                   scale_low=1, scale_high=200, vmin=None, vmax=None):
+    """
+    Plots stacked wavelet spectrograms for different paramsets with a consistent wavelet and frequency config.
+
+    Parameters:
+        paramsets (list): List of paramset identifiers (used as titles).
+        lfp_pkl_file (str): Filename of LFP pickle file to load from each paramset dir.
+        wavelet (str): Wavelet type.
+        num_scales (int): Number of wavelet scales.
+        freq_range (tuple): Frequency range (Hz) to display.
+        scale_low (float): Lower scale bound for wavelet transform.
+        scale_high (float): Upper scale bound for wavelet transform.
+        vmin, vmax (float): Color scale limits.
+    """
+    n_paramsets = len(paramsets)
+    fig, axs = plt.subplots(n_paramsets, 1, figsize=(18, 5 * n_paramsets), constrained_layout=True)
+
+    if n_paramsets == 1:
+        axs = [axs]
+
+    for i, paramset in enumerate(paramsets):
+        results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+        print(f"Loading: {paramset}")
+
+        events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+
+        # Compute wavelet transform
+        cfs, frequencies, wavelet_power = compute_wavelet_transform(
+            lfp, dt, num_scales=num_scales, wavelet=wavelet,
+            lowcut=freq_range[0], highcut=freq_range[1],
+            scale_low=scale_low, scale_high=scale_high
+        )
+
+        ax = axs[i]
+        contour = ax.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
+
+        ax.set_xlim(min(t), max(t))
+        ax.set_ylim(freq_range)
+        ax.set_xlabel('Time [ms]', fontsize=14)
+        ax.set_ylabel('Frequency [Hz]', fontsize=14)
+
+        ax.set_title(str(paramset), fontsize=18)
+
+        cbar = plt.colorbar(contour, ax=ax, pad=0.02)
+        cbar.set_label('Wavelet Power', fontsize=14)
+        cbar.ax.tick_params(labelsize=12)
+        cbar.formatter = tkr.FormatStrFormatter('%.2f')
+        cbar.update_ticks()
+
+    fig.suptitle(f"Wavelet: {wavelet}, Scales: {num_scales}, Freq range: {freq_range}", fontsize=20)
+    plt.show()
+
+
 def compute_verage(params_dict, t, lfp, dt_ms, wavelet, lowcut, highcut):
     cfs, frequencies, lfp_wavelet_power  = compute_wavelet_transform(lfp, dt_ms, num_scales=50, wavelet=wavelet, lowcut=lowcut, highcut=highcut, \
                                 scale_low=10, scale_high=2000, bp_order=6, logscales=False)
