@@ -1,9 +1,12 @@
 from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 from load import get_params, load_result
 from inputs_help import gc_og_indices
+from scipy.ndimage import gaussian_filter1d
+from matplotlib.widgets import Slider
 
 
 def load_spike_times(paramsets):
@@ -71,6 +74,43 @@ def compute_spike_rates(spike_times_dict, setup_time, T_sim):
     duration = T_sim - setup_time
     return {cell_id: len(spikes) / duration for cell_id, spikes in spike_times_dict.items()}
 
+
+def compute_spike_rates_during_inhale(spike_times_dict, sniff_rate=5, sniff_count=9, setup_time=50, inhale_duration=125):
+    """
+    Compute spike rates for each cell during inhale periods only.
+
+    Parameters:
+    - spike_times_dict: Dictionary with cell ID as key and list of spike times (ms) as values.
+    - sniff_rate: Sniffing frequency in Hz.
+    - sniff_count: Number of sniffs.
+    - setup_time: Time before first sniff (ms).
+    - inhale_duration: Duration of inhale phase for each sniff (ms).
+
+    Returns:
+    - Dictionary with cell ID as key and spike rate (Hz) during inhale periods as value.
+    """
+    sniff_duration = 1000 / sniff_rate  # full sniff cycle in ms
+    inhale_windows = []
+
+    # Build list of inhale time windows
+    for i in range(sniff_count):
+        inhale_start = setup_time + i * sniff_duration
+        inhale_end = inhale_start + inhale_duration
+        inhale_windows.append((inhale_start, inhale_end))
+
+    # Total time spent inhaling
+    total_inhale_time = inhale_duration * sniff_count
+
+    rates = {}
+    for cell_id, spikes in spike_times_dict.items():
+        # Count how many spikes fall within inhale windows
+        inhale_spikes = 0
+        for start, end in inhale_windows:
+            inhale_spikes += np.sum((start <= np.array(spikes)) & (np.array(spikes) < end))
+
+        rates[cell_id] = inhale_spikes / total_inhale_time  # spikes/ms -> Hz since total_inhale_time is in ms
+
+    return rates
 
 
 def get_proportion_spiking(spike_times):
@@ -182,6 +222,81 @@ def get_group_firing_rates(spike_times, dt):
         group_firing_rates[group] /= group_counts[group]
 
     return group_firing_rates
+
+
+
+def get_inst_firing_rate(spiking_cells, spike_times_clean, cell_type, dt, duration, sigma_ms):
+    """
+    Computes the instantaneous firing rate for a given cell type using Gaussian smoothing.
+
+    Parameters:
+    -----------
+    spiking_cells : list of str
+        List of cell identifiers (e.g., 'MC4[0].soma').
+    spike_times_clean : list of list of float
+        Corresponding list of spike times for each cell.
+    cell_type : str
+        Cell type to filter for (e.g., 'MC', 'TC', 'GC').
+    dt : float
+        Time resolution in ms.
+    duration : float
+        Total simulation time in ms.
+    sigma_ms : float
+        Standard deviation of Gaussian filter in ms.
+
+    Returns:
+    --------
+    t : np.ndarray
+        Time vector.
+    rate_smoothed : np.ndarray
+        Instantaneous firing rate (Hz per cell).
+    """
+    import numpy as np
+    from scipy.ndimage import gaussian_filter1d
+
+    n_bins = int(duration / dt)
+    t = np.arange(n_bins) * dt
+    spike_list_clean = list(zip(spiking_cells, spike_times_clean))
+
+    spike_train = np.zeros(n_bins)
+
+    matching_cells = 0
+    for seg, times in spike_list_clean:
+        if cell_type in seg:
+            indices = (np.array(times) / dt).astype(int)
+            indices = indices[indices < n_bins]  # Safety check
+            spike_train[indices] += 1
+            matching_cells += 1
+
+    sigma_bins = sigma_ms / dt
+    rate_smoothed = gaussian_filter1d(spike_train, sigma=sigma_bins) * (1000.0 / dt)
+
+    if matching_cells > 0:
+        rate_smoothed /= matching_cells  # Normalize to Hz per cell
+
+    return t, rate_smoothed
+
+
+def plot_inst_firing_rate(ax, t, rate_smoothed, col, linewidth):
+    """
+    Plots the instantaneous firing rate on the given axis.
+
+    Parameters:
+    -----------
+    ax : matplotlib.axes.Axes
+        The axis on which to plot the rate.
+    t : np.ndarray
+        Time vector.
+    rate_smoothed : np.ndarray
+        Instantaneous firing rate (Hz).
+    col : str or tuple
+        Line color.
+    linewidth : float
+        Width of plotted line.
+    """
+    ax.plot(t, rate_smoothed, color=col, linewidth=linewidth)
+    ax.set_xlabel('Simulation Time [ms]', fontsize=18)
+    ax.set_ylabel('Inst. Rate [Hz]', fontsize=18)
 
 
 
@@ -349,6 +464,28 @@ def plot_spike_metric_from_paramsets(paramsets, metric='rate'):
     plt.show()
 
 
+def plot_GC_rates_across_paramsets(comparison_rates_data):
+    plt.figure(figsize=(12, 5))  # Wider for better visibility
+
+    colors = ["black", "orange", "green", "red", "purple"]  # Add more if needed
+
+    for i, (paramset, rates) in enumerate(comparison_rates_data.items()):
+        color = colors[i % len(colors)]  # Cycle through colors
+        plt.hist(
+            rates["all_GC"], bins=20, alpha=0.4, color=color, label=f"{paramset} - All GCs"
+        )
+        
+        # Add vertical line for mean spike rate
+        mean_rate = np.mean(rates["all_GC"])
+        plt.axvline(mean_rate, color=color, linestyle="dashed", linewidth=2)
+
+    plt.xlabel("Spike Rate (Hz)")  # Adjusted for spike rate
+    plt.ylabel("Number of GCs")
+    plt.legend()
+    plt.title("Comparison of GC Spike Rates over whole simulation, control, and with centrifugal inputs")
+    plt.show()
+    
+
 def plot_avg_spike_rate_change(experiments, setup_time, T_sim):
     experiment_names = list(experiments.keys())
     avg_changes = [compute_avg_spike_rate_change(experiments['Control']['spike_times'], experiments[exp]['spike_times'], setup_time, T_sim) for exp in experiment_names if exp != 'Control']
@@ -362,13 +499,27 @@ def plot_avg_spike_rate_change(experiments, setup_time, T_sim):
     plt.tight_layout()
     plt.show()
 
+
 def plot_avg_spike_rate_change_for_all(paramsets):
+    """
+    Plots the average spike rate change for each paramset compared to the control (first in list).
+    Uses black for control and distinct default matplotlib colors for others.
+    """
+    assert len(paramsets) > 0, "paramsets list cannot be empty."
+
     # Load spike times data, params_dict, and t by calling load_spike_times
     spike_times_data, params_dict, t = load_spike_times(paramsets)
     
-    # Create a color list: control as black, others as different colors
-    colors = ['black'] + ['red', 'orange', 'green', 'blue', 'purple'][:len(paramsets)-1]
-    
+    # Get default matplotlib color cycle
+    default_colors = [d['color'] for d in plt.rcParams['axes.prop_cycle']]
+    bar_colors = ['black'] + default_colors[:len(paramsets)-1]
+
+    # If there are more paramsets than default colors, extend with tab20
+    if len(paramsets) > len(bar_colors):
+        
+        cmap = cm.get_cmap('tab20', len(paramsets) - 1)
+        bar_colors = ['black'] + [cmap(i) for i in range(len(paramsets) - 1)]
+
     # Compute the average spike rate change for each paramset
     avg_changes = []
     for i, paramset in enumerate(paramsets):
@@ -379,16 +530,16 @@ def plot_avg_spike_rate_change_for_all(paramsets):
         # Compute the spike rate difference
         rate_differences = [rates_other[cell] - rates_control[cell] for cell in rates_control]
         avg_rate_change = np.mean(rate_differences)
-        
         avg_changes.append(avg_rate_change)
     
     # Plot the average spike rate changes
     plt.figure(figsize=(12, 4))
-    plt.bar(range(len(paramsets)), avg_changes, color=colors, tick_label=paramsets)
+    plt.bar(range(len(paramsets)), avg_changes, color=bar_colors, tick_label=paramsets)
+    plt.xticks(rotation=45, ha='right')
     plt.xlabel('Experiment')
     plt.ylabel('Change in Average Spike Rate (spikes/s)')
     plt.title('Change in Spike Rate Relative to Control')
-    plt.axhline(0, color='gray', linestyle='--')  # Gray horizontal line at y=0
+    plt.axhline(0, color='gray', linestyle='--')  # Reference line at 0
     plt.tight_layout()
     plt.show()
 
@@ -421,6 +572,55 @@ def plot_firing_rates(group_firing_rates, title="Spike Rates by Cell Type"):
     plt.show()
 
 
+def plot_group_firing_rates_by_cell_type(paramsets):
+    """
+    Compares average firing rates per group across paramsets using dot plots.
+    First paramset is black; others use distinct colors from the default matplotlib color cycle.
+
+    Parameters:
+    paramsets (list of str): List of paramset names to load and analyze.
+    """
+    assert len(paramsets) > 0, "paramsets list cannot be empty."
+
+    all_group_rates = {}
+
+    for paramset in paramsets:
+        # Load simulation result
+        events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+
+        # Get group firing rates
+        group_rates = get_group_firing_rates(spike_times, dt)
+        all_group_rates[paramset] = group_rates
+
+    # Get all unique groups and sort for consistent x-axis
+    all_groups = sorted(set(group for rates in all_group_rates.values() for group in rates))
+    x = range(len(all_groups))
+    offset = 0.1
+
+    # Get full color cycle (excluding black for now)
+    default_colors = [d['color'] for d in plt.rcParams['axes.prop_cycle']]
+    paramset_colors = ['black'] + default_colors  # First paramset black
+
+    # If too many paramsets, add more unique colors from a larger colormap
+    if len(paramsets) > len(paramset_colors):
+        import matplotlib.cm as cm
+        cmap = cm.get_cmap('tab20', len(paramsets) - 1)
+        paramset_colors = ['black'] + [cmap(i) for i in range(len(paramsets) - 1)]
+
+    plt.figure(figsize=(10, 6))
+
+    for i, paramset in enumerate(paramsets):
+        rates = [all_group_rates[paramset].get(group, 0) for group in all_groups]
+        x_positions = [xi + (i - len(paramsets) / 2) * offset for xi in x]
+        plt.scatter(x_positions, rates, color=paramset_colors[i], label=paramset, s=50)
+
+    plt.xticks(x, all_groups, fontsize=12)
+    plt.ylabel("Firing Rate (Hz)", fontsize=12)
+    plt.title("Group Firing Rates by Cell Type Across Paramsets", fontsize=14)
+    plt.legend(title="Paramset")
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_spikes_dots(spike_times):
@@ -567,18 +767,85 @@ def plot_spikes_raster(spike_times, ax):
 
 
 
-    
-def get_spikes_hist(spiking_cells, spike_times_clean, cell_type, bin_edges=None):
-    spike_list_clean = list(zip(spiking_cells, spike_times_clean))
-    all_times = []
+import matplotlib.pyplot as plt
 
-    for seg, times in spike_list_clean:
-        if cell_type in seg:
-            all_times.extend(times)
+def plot_spike_times_all_cells(spike_ts):
+    """
+    Raster plot of spike times with vertical lines at 250ms, 500ms, 750ms, etc.
+    """
+    plt.figure(figsize=(10, len(spike_ts) * 0.25))
+
+    color_map = {
+        'TC': 'magenta',
+        'MC': 'blue',
+        'GC': 'orange'
+    }
+
+    yticks = []
+    ylabels = []
+
+    # Loop through all cells and plot their spike times
+    for i, (label, spikes) in enumerate(spike_ts):
+        y = i
+        cell_type = label[:2]
+        color = color_map.get(cell_type, 'gray')
+
+        if spikes:
+            plt.plot(spikes, [y] * len(spikes), 'o', color=color, markersize=4)
+
+        yticks.append(y)
+        ylabels.append(f"{i}: {label}")
+
+    plt.yticks(yticks, ylabels, fontsize=7)
+    plt.gca().invert_yaxis()  # Flip y-axis so 0 is at the top
+
+    # Add vertical lines at 250ms, 500ms, 750ms, etc.
+    for t in range(250, 2000, 250):  # You can adjust the range and interval
+        plt.axvline(x=t, color='lightgray', linestyle='--', linewidth=0.5)
+
+    plt.xlabel("Time (ms)")
+    plt.ylabel("Cells")
+    plt.title("Spike Times Raster Plot with Fixed Time Ticks (250ms, 500ms, etc.)")
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_spikes_hist(ax, spiking_cells, spike_times_clean, cell_type, col, linewidth, bin_edges=None):
+    """
+    Computes and plots a spike histogram for a given cell type.
+
+    Parameters:
+    -----------
+    ax : matplotlib.axes.Axes
+        The axis on which to plot the histogram.
+    spiking_cells : list of str
+        List of cell identifiers (e.g., 'MC4[0].soma').
+    spike_times_clean : list of list of float
+        Corresponding list of spike times for each cell.
+    cell_type : str
+        Cell type to filter for (e.g., 'MC', 'TC', 'GC').
+    col : str or tuple
+        Color to use for the plot.
+    linewidth : float
+        Width of the plotted line.
+    bin_edges : array-like, optional
+        Custom bin edges for histogram. If None, uses 50 bins over the data range.
+
+    Returns:
+    --------
+    bincenters : np.ndarray
+        Center of each time bin.
+    rates : np.ndarray
+        Spike rate (spikes/ms) in each bin.
+    """
+    # Combine cell names and their spike times
+    spike_list_clean = list(zip(spiking_cells, spike_times_clean))
     
+    # Collect spike times for the selected cell type
+    all_times = [t for seg, times in spike_list_clean if cell_type in seg for t in times]
     all_times = np.array(all_times)
 
-    # Use the provided bin_edges, or create one if not given
+    # Compute histogram
     if bin_edges is None:
         y, binedges = np.histogram(all_times, bins=50)
     else:
@@ -586,29 +853,15 @@ def get_spikes_hist(spiking_cells, spike_times_clean, cell_type, bin_edges=None)
     
     bincenters = 0.5 * (binedges[1:] + binedges[:-1])
     binsize = bincenters[1] - bincenters[0]
-    rates = y / binsize
+    rates = y / binsize  # Convert count to rate
 
-    return bincenters, rates
-
-
-def plot_spikes_hist(ax, bincenters, rates, col, linewidth):
+    # Plot the spike histogram
     ax.plot(bincenters, rates, color=col, linewidth=linewidth)
     ax.set_xlabel('Simulation Time [ms]', fontsize=18)
     ax.set_ylabel('Rate', fontsize=18)
 
-
-def get_spikes_hist2(spiking_cells, spike_times_clean, cell_type, bins=50):
-    spike_list_clean = list(zip(spiking_cells, spike_times_clean))
-
-    for seg, times in spike_list_clean:
-
-        if cell_type in seg:
-            times = np.array(times)
-            y, binedges = np.histogram(times, bins=bins)  # returns the right edge of the bins
-            bincenters = 0.5*(binedges[1:]+binedges[:-1])  # better to use the center of the bins
-            binsize = bincenters[1] - bincenters[0]  # calculate the width of the bins
-            rates = y/binsize  # scale y values
     return bincenters, rates
+
 
 
 
