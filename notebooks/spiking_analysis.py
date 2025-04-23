@@ -2,11 +2,17 @@ from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+try:
+    import cPickle
+except:
+    import pickle as cPickle
 
-from load import get_params, load_result
+from load import get_params, load_result, get_dirs
+import os
 from inputs_help import gc_og_indices
 from scipy.ndimage import gaussian_filter1d
 from matplotlib.widgets import Slider
+from colors import *
 
 
 def load_spike_times(paramsets):
@@ -75,43 +81,6 @@ def compute_spike_rates(spike_times_dict, setup_time, T_sim):
     return {cell_id: len(spikes) / duration for cell_id, spikes in spike_times_dict.items()}
 
 
-def compute_spike_rates_during_inhale(spike_times_dict, sniff_rate=5, sniff_count=9, setup_time=50, inhale_duration=125):
-    """
-    Compute spike rates for each cell during inhale periods only.
-
-    Parameters:
-    - spike_times_dict: Dictionary with cell ID as key and list of spike times (ms) as values.
-    - sniff_rate: Sniffing frequency in Hz.
-    - sniff_count: Number of sniffs.
-    - setup_time: Time before first sniff (ms).
-    - inhale_duration: Duration of inhale phase for each sniff (ms).
-
-    Returns:
-    - Dictionary with cell ID as key and spike rate (Hz) during inhale periods as value.
-    """
-    sniff_duration = 1000 / sniff_rate  # full sniff cycle in ms
-    inhale_windows = []
-
-    # Build list of inhale time windows
-    for i in range(sniff_count):
-        inhale_start = setup_time + i * sniff_duration
-        inhale_end = inhale_start + inhale_duration
-        inhale_windows.append((inhale_start, inhale_end))
-
-    # Total time spent inhaling
-    total_inhale_time = inhale_duration * sniff_count
-
-    rates = {}
-    for cell_id, spikes in spike_times_dict.items():
-        # Count how many spikes fall within inhale windows
-        inhale_spikes = 0
-        for start, end in inhale_windows:
-            inhale_spikes += np.sum((start <= np.array(spikes)) & (np.array(spikes) < end))
-
-        rates[cell_id] = inhale_spikes / total_inhale_time  # spikes/ms -> Hz since total_inhale_time is in ms
-
-    return rates
-
 
 def get_proportion_spiking(spike_times):
     from collections import defaultdict
@@ -147,8 +116,6 @@ def compute_avg_spike_rate_change(spike_times_control, spike_times_centrif, setu
     avg_rate_change = np.mean(rate_differences)
     
     return avg_rate_change
-
-
 
 
 
@@ -277,7 +244,50 @@ def get_inst_firing_rate(spiking_cells, spike_times_clean, cell_type, dt, durati
     return t, rate_smoothed
 
 
-def plot_inst_firing_rate(ax, t, rate_smoothed, col, linewidth):
+def get_inhale_firing_rate(spiking_cells, spike_times_clean, cell_type, sniff_rate=5, sniff_count=9, setup_time=50, inhale_duration=125):
+    """
+    Computes the average firing rate during inhale periods for a given cell type.
+
+    Parameters:
+    -----------
+    spiking_cells : list of str
+        List of cell identifiers (e.g., 'MC4[0].soma').
+    spike_times_clean : list of list of float
+        List of spike times for each corresponding cell.
+    cell_type : str
+        Cell type to filter for (e.g., 'MC', 'TC', 'GC').
+    sniff_rate : float
+        Sniffing frequency in Hz.
+    sniff_count : int
+        Number of sniffs to consider.
+    setup_time : float
+        Time before first sniff (ms).
+    inhale_duration : float
+        Duration of inhale phase in ms.
+
+    Returns:
+    --------
+    mean_rate : float
+        Average firing rate (Hz) of all matching cells during inhale.
+    """
+    sniff_duration = 1000 / sniff_rate  # full sniff cycle in ms
+    inhale_windows = [(setup_time + i * sniff_duration, setup_time + i * sniff_duration + inhale_duration) for i in range(sniff_count)]
+    total_inhale_time = inhale_duration * sniff_count  # in ms
+
+    rates = []
+    for seg, spikes in zip(spiking_cells, spike_times_clean):
+        if cell_type in seg:
+            spikes = np.array(spikes)
+            inhale_spikes = sum(np.sum((start <= spikes) & (spikes < end)) for start, end in inhale_windows)
+            rate_hz = inhale_spikes / total_inhale_time * 1000  # convert to Hz
+            rates.append(rate_hz)
+
+    return rates
+
+
+
+
+def plot_inst_firing_rate(ax, t, rate_smoothed, col='blue', linewidth=2, label=None):
     """
     Plots the instantaneous firing rate on the given axis.
 
@@ -294,9 +304,213 @@ def plot_inst_firing_rate(ax, t, rate_smoothed, col, linewidth):
     linewidth : float
         Width of plotted line.
     """
-    ax.plot(t, rate_smoothed, color=col, linewidth=linewidth)
+    ax.plot(t, rate_smoothed, color=col, linewidth=linewidth, label=label)
     ax.set_xlabel('Simulation Time [ms]', fontsize=18)
     ax.set_ylabel('Inst. Rate [Hz]', fontsize=18)
+
+def plot_inst_rate_one_sniff(paramset, cell_type='MC', color='blue', sigma_values=[10], ax=None, label=None, sniff_num=3):
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    # Load simulation data
+    events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+    spiking_cells, spike_times_clean = get_spiking_cells(spike_times)
+
+    # Sniff timing
+    sniff_rate = 5  # 5 Hz sniff rate
+    t_sniff = 1000 / sniff_rate
+    zoom_start = (sniff_num - 1) * t_sniff
+    zoom_end = sniff_num * t_sniff
+
+    for sigma_ms in sigma_values:
+        time_vector, rate_smoothed = get_inst_firing_rate(
+            spiking_cells, spike_times_clean, cell_type=cell_type,
+            dt=dt, duration=t[-1], sigma_ms=sigma_ms
+        )
+
+        # Plot
+        plot_inst_firing_rate(
+            ax=ax,
+            t=time_vector,
+            rate_smoothed=rate_smoothed,
+            col=color,
+            linewidth=2,
+            label=label
+        )
+
+        ax.set_xlim(zoom_start, zoom_end)
+        ax.set_title(f'{paramset}\n{cell_type} Sigma={sigma_ms} ms', fontsize=12)
+        ax.set_ylim(bottom=0)
+        ax.set_xlabel('Time (ms)')
+        ax.set_ylabel('Rate (Hz)')
+        break  # Only first sigma in subplot context
+
+
+def plot_all_sniff_rates(paramsets, sniff_num=3, sigma=15, cell_types=['MC', 'TC', 'GC'], colors=None):
+    """
+    Plot instantaneous firing rates for multiple paramsets and cell types for a specific sniff.
+    
+    Args:
+        paramsets (list): List of paramset names to plot.
+        sniff_num (int): The sniff number to zoom into (1-based indexing).
+        sigma (float): Gaussian smoothing window (ms).
+        cell_types (list): Cell types to plot (e.g., ['MC', 'TC', 'GC']).
+        colors (dict): Dictionary mapping cell types to colors.
+    """
+    if colors is None:
+        colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
+    
+    fig, axes = plt.subplots(nrows=len(cell_types), ncols=len(paramsets), figsize=(5 * len(paramsets), 3 * len(cell_types)), sharex=True)
+
+    # Ensure axes is always 2D for consistent indexing
+    if len(cell_types) == 1:
+        axes = np.expand_dims(axes, 0)
+    if len(paramsets) == 1:
+        axes = np.expand_dims(axes, 1)
+
+    for col_idx, paramset in enumerate(paramsets):
+        for row_idx, cell_type in enumerate(cell_types):
+            ax = axes[row_idx, col_idx]
+            plot_inst_rate_one_sniff(
+                paramset=paramset,
+                cell_type=cell_type,
+                color=colors[cell_type],
+                sigma_values=[sigma],
+                ax=ax,
+                label=paramset,
+                sniff_num=sniff_num
+            )
+            ax.set_ylabel(f'{cell_type} Firing Rate (Hz)', fontsize=12)
+            ax.set_ylim(0, 40)
+            if row_idx == 0:
+                ax.set_title(f'{paramset}', fontsize=14)
+
+    plt.tight_layout()
+    plt.show()
+
+def plot_all_sniff_rates_with_inputs(paramsets, sniff_num=3, sigma=15, cell_types=['MC', 'TC', 'GC'], colors=None):
+    """
+    Plot GC input events and cell-type-specific firing rates for multiple paramsets and a given sniff.
+    
+    Args:
+        paramsets (list): List of paramset names to plot.
+        sniff_num (int): The sniff number to zoom into (1-based).
+        sigma (float): Smoothing for firing rate.
+        cell_types (list): List of cell types (e.g., ['MC', 'TC', 'GC']).
+        colors (dict): Optional color dict mapping cell type -> color.
+    """
+
+    if colors is None:
+        colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
+    
+    nrows = 1 + len(cell_types)
+    ncols = len(paramsets)
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(5 * ncols, 3 * nrows), sharex=True)
+
+    if nrows == 1:
+        axes = np.expand_dims(axes, 0)
+    if ncols == 1:
+        axes = np.expand_dims(axes, 1)
+
+    for col_idx, paramset in enumerate(paramsets):
+        # Load everything up front
+        events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+        
+        # Sniff window
+        sniff_rate = 5  # Hz
+        t_sniff = 1000 / sniff_rate
+        zoom_start = (sniff_num - 1) * t_sniff
+        zoom_end = sniff_num * t_sniff
+
+        # --- Row 0: Input rasters ---
+        ax0 = axes[0, col_idx]
+        paramset_dir = get_dirs(paramset)[1]
+        with open(os.path.join(paramset_dir, 'gc_input_times.pkl'), 'rb') as f:
+            gc_input_times = cPickle.load(f)
+        gc_input_times.sort(key=lambda row: row[0])
+        
+        i = 0
+        for seg, times in gc_input_times:
+            times = [t for t in times if zoom_start <= t <= zoom_end]
+            ax0.plot(times, [i] * len(times), '|', color=colors['GC'], ms=8)
+            i += 0.01
+
+        for seg, times in events.items():
+            if 'MC' in seg:
+                color = colors['MC']
+            elif 'TC' in seg:
+                color = colors['TC']
+            else:
+                continue
+            times = [t for t in times if zoom_start <= t <= zoom_end]
+            ax0.plot(times, [i] * len(times), '|', color=color, ms=8)
+            i += 0.01
+        
+        ax0.set_xlim(zoom_start, zoom_end)
+        ax0.set_yticks([])
+        ax0.set_ylabel('Inputs + Spikes', fontsize=12)
+        ax0.set_title(paramset, fontsize=14)
+
+        # --- Rows 1+: Firing rates for each cell type ---
+        for row_idx, cell_type in enumerate(cell_types, start=1):
+            ax = axes[row_idx, col_idx]
+            plot_inst_rate_one_sniff(
+                paramset=paramset,
+                cell_type=cell_type,
+                color=colors[cell_type],
+                sigma_values=[sigma],
+                ax=ax,
+                label=None,
+                sniff_num=sniff_num
+            )
+            ax.set_ylabel(f'{cell_type} Rate (Hz)', fontsize=12)
+            ax.set_ylim(0, 40)
+            ax.set_xticks(np.linspace(zoom_start, zoom_end, 5))
+            if row_idx == nrows - 1:
+                ax.set_xlabel('Time (ms)')
+            else:
+                ax.tick_params(labelbottom=True)
+
+    plt.tight_layout()
+    plt.show()
+
+
+
+def plot_firing_rate_with_inhale_overlay(
+    t,
+    rates_dict,  # dict: {'MC': rate_array, 'GC': rate_array}
+    inhale_mask,
+    sniff_rate=5,
+    sniff_count=9,
+    setup_time=50,
+    inhale_duration=125,
+    title="Instantaneous Firing Rates with Inhale Overlay"
+):
+    # Define colors for each cell type
+    colors = {'MC': 'blue', 'GC': 'orange', 'TC': 'magenta'}
+
+    plt.figure(figsize=(10, 4))
+
+    # Plot each cell type's firing rate with specific colors
+    for label, rate in rates_dict.items():
+        color = colors.get(label, 'black')  # Default to black if no color is found
+        plt.plot(t, rate, color=color, label=label)
+
+    # Overlay inhale periods
+    sniff_duration = 1000 / sniff_rate
+    for i in range(sniff_count):
+        inhale_start = setup_time + i * sniff_duration
+        inhale_end = inhale_start + inhale_duration
+        plt.axvspan(inhale_start, inhale_end, color='gray', alpha=0.2)
+
+    plt.xlabel("Time (ms)")
+    plt.ylabel("Instantaneous Firing Rate (Hz)")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 
 
@@ -599,14 +813,9 @@ def plot_group_firing_rates_by_cell_type(paramsets):
     offset = 0.1
 
     # Get full color cycle (excluding black for now)
-    default_colors = [d['color'] for d in plt.rcParams['axes.prop_cycle']]
-    paramset_colors = ['black'] + default_colors  # First paramset black
-
-    # If too many paramsets, add more unique colors from a larger colormap
-    if len(paramsets) > len(paramset_colors):
-        import matplotlib.cm as cm
-        cmap = cm.get_cmap('tab20', len(paramsets) - 1)
-        paramset_colors = ['black'] + [cmap(i) for i in range(len(paramsets) - 1)]
+    #default_colors = [d['color'] for d in plt.rcParams['axes.prop_cycle']]
+    paramset_colors = get_colors_list()
+    paramset_colors = [(0.0, 0.0, 0.0, 1.0)] + paramset_colors # First paramset black
 
     plt.figure(figsize=(10, 6))
 
