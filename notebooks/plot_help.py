@@ -488,22 +488,26 @@ def subplots_spikes(paramset, params_short=True):
     spiking_cells, spike_times_clean = get_spiking_cells(spike_times)
     bin_edges = np.arange(min_t, max_t, 50)  # Adjusted bin range
 
+    sigma=10
     # TC spikes
-    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'TC', bin_edges=bin_edges)
+    t_tc, rate_smoothed_tc = get_inst_firing_rate(spiking_cells, spike_times_clean, cell_type='TC', dt=dt, duration=max_t, sigma_ms=sigma)
+    plot_inst_firing_rate(ax[1], t_tc, rate_smoothed_tc, col='magenta', linewidth=2, label=None)
     ax[1].set_xticks(np.arange(min_t, max_t, 50.0))
-    ax[1].set_title('TC Spike Histogram', fontsize=16)
+    ax[1].set_title('TC Instantaneous Firing Rate (Hz)', fontsize=16)
     #plot_spikes_hist(ax[1], bincenters, rates, col='magenta', linewidth=2)
 
     # MC spikes
-    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'MC', bin_edges=bin_edges)
+    t_mc, rate_smoothed_mc = get_inst_firing_rate(spiking_cells, spike_times_clean, cell_type='MC', dt=dt, duration=max_t, sigma_ms=sigma)
+    plot_inst_firing_rate(ax[2], t_mc, rate_smoothed_mc, col='blue', linewidth=2, label=None)
     ax[2].set_xticks(np.arange(min_t, max_t, 50.0))
-    ax[2].set_title('MC Spike Histogram', fontsize=16)
+    ax[2].set_title('MC Instantaneous Firing Rate (Hz)', fontsize=16)
     #plot_spikes_hist(ax[2], bincenters, rates, col='blue', linewidth=2)
 
     # GC spikes
-    bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'GC', bin_edges=bin_edges)
+    t_gc, rate_smoothed_gc = get_inst_firing_rate(spiking_cells, spike_times_clean, cell_type='GC', dt=dt, duration=max_t, sigma_ms=sigma)
+    plot_inst_firing_rate(ax[3], t_gc, rate_smoothed_gc, col='orange', linewidth=2, label=None)
     ax[3].set_xticks(np.arange(min_t, max_t, 50.0))
-    ax[3].set_title('GC Spike Histogram', fontsize=16)
+    ax[3].set_title('GC Instantaneous Firing Rate (Hz)', fontsize=16)
     #plot_spikes_hist(ax[3], bincenters, rates, col='orange', linewidth=2)
 
     ax[3].set_xlabel('Simulation Time [ms]', fontsize=18)
