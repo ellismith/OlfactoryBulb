@@ -10,6 +10,8 @@ from spectrogram import *
 from wavelet import *
 from spiking_analysis import *
 
+
+
 def mix_colors(color1, color2):
     """
     Mix two colors and return the result as a hex color code.
@@ -24,6 +26,9 @@ def mix_colors(color1, color2):
     c1 = np.array(mcolors.to_rgb(color1))
     c2 = np.array(mcolors.to_rgb(color2))
     return mcolors.to_hex((c1 + c2) / 2)
+
+
+
 
 
 def get_toy_data(f1=28, f2=70, f3=100, dt=0.1, duration=2000):
@@ -238,7 +243,7 @@ def subplots_mctc_activity(paramset, params_short=True, lfp_pkl_file='lfp.pkl', 
     print("results_dir:", results_dir)
 
     fig_width = 27
-    events, vs, spike_times, t, lfp, lfp_bp_low, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+    events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
         lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
     print("lfp_pkl_file:", lfp_pkl_file)
 
@@ -300,9 +305,10 @@ def subplots_mctc_activity(paramset, params_short=True, lfp_pkl_file='lfp.pkl', 
     ax[1].margins(0)
     t = t[:len(lfp)] # chop the extra 2 samples off t (?) 
     ax[1].plot(t, lfp * 10000 + 200, label='raw', color='black')
-    ax[1].plot(t, lfp_bp_beta * 10000 - 7000, label='BP filtered: beta', color='blue')
-    ax[1].plot(t, lfp_bp_gamma * 10000 - 10000, label='BP filtered: gamma', color='green')
-    ax[1].plot(t, lfp_bp_hfo * 10000 - 13000, label='BP filtered: HFO', color='red')
+    ax[1].plot(t, lfp_bp_theta * 10000 - 7000, label='BP filtered: theta', color='purple')
+    ax[1].plot(t, lfp_bp_beta * 10000 - 10000, label='BP filtered: beta', color='blue')
+    ax[1].plot(t, lfp_bp_gamma * 10000 - 13000, label='BP filtered: gamma', color='green')
+    ax[1].plot(t, lfp_bp_hfo * 10000 - 16000, label='BP filtered: HFO', color='red')
 
     ax[1].set_xticks(np.arange(min_t, max_t, 50.0))
     ax[1].tick_params(labelsize=14)
@@ -321,7 +327,135 @@ def subplots_mctc_activity(paramset, params_short=True, lfp_pkl_file='lfp.pkl', 
     plt.show()
 
 
+def subplots_inputs(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+    
+    fig_width = 27
 
+    # Load result data
+    events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+    lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+    
+    # Override dt if available in params
+    dt = params_dict.get('dt', 0.1)
+
+    params_list, params_filename = get_params(paramset)
+    params_title = params_filename if params_short else params_list
+
+    # Create subplot figure
+    fig, ax = plt.subplots(1, 1, figsize=(fig_width, 3), constrained_layout=True)
+
+
+    # Load GC input times
+    with open(os.path.join(paramset_dir, 'gc_input_times.pkl'), 'rb') as f:
+        gc_input_times = cPickle.load(f)
+    gc_input_times.sort(key=lambda row: row[0])
+
+    i = 0
+    # Plot GC inputs (as orange bars)
+    for seg, times in gc_input_times:
+        color = 'orange'
+        ax.plot(times, [i] * len(times), '|', color=color, ms=8, label=seg)
+        i += 0.01
+
+    # Convert events dict to sorted list
+    events = sorted(events.items(), key=lambda row: row[0])
+
+    # Plot events for MC and TC cells
+    for seg, times in events:
+        if 'MC' in seg:
+            color = 'b'
+        elif 'TC' in seg:
+            color = 'm'
+        else:
+            continue  # Skip other types
+
+        ax.plot(times, [i] * len(times), '|', color=color, ms=8, label=seg)
+        i += 0.01
+
+    # Time axis limits
+    min_t = min(t)
+    max_t = max(t)
+
+    ax.set_xticks(np.arange(min_t, max_t, 50.0))
+    ax.tick_params(labelsize=12)
+    ax.margins(0)
+    ax.set_yticks([])
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.set_xlabel('Simulation Time [ms]', fontsize=18)
+    ax.set_xlim(min_t, max_t)
+    ax.set_title(paramset, fontsize=24)
+
+    plt.show()
+
+
+def stacked_inputs_plot(paramsets, lfp_pkl_file='lfp.pkl'):
+    """
+    Plot input times for multiple paramsets in vertically stacked subplots.
+
+    Args:
+        paramsets (list): List of paramset identifiers.
+        params_short (bool): Whether to use short paramset names for subplot titles.
+        lfp_pkl_file (str): Filename of LFP pickle file to load.
+    """
+    n_paramsets = len(paramsets)
+    fig_width = 27
+    fig_height_per_plot = 6
+    total_height = fig_height_per_plot * n_paramsets
+
+    fig, axs = plt.subplots(n_paramsets, 1, figsize=(fig_width, total_height), constrained_layout=True)
+
+    if n_paramsets == 1:
+        axs = [axs]
+
+    for idx, paramset in enumerate(paramsets):
+        results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+        print(f"Loading: {paramset}")
+
+        events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+            lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+
+        dt = params_dict.get('dt', 0.1)
+        #params_list, params_filename = get_params(paramset)
+        
+        ax = axs[idx]
+
+        with open(os.path.join(paramset_dir, 'gc_input_times.pkl'), 'rb') as f:
+            gc_input_times = cPickle.load(f)
+            gc_input_times.sort(key=lambda row: row[0])
+
+        i = 0
+        for seg, times in gc_input_times:
+            ax.plot(times, [i] * len(times), '|', color='orange', ms=8)
+            i += 0.01
+
+        events_sorted = sorted(events.items(), key=lambda x: x[0])
+        for seg, times in events_sorted:
+            if 'MC' in seg:
+                col = 'b'
+            elif 'TC' in seg:
+                col = 'm'
+            else:
+                continue
+            ax.plot(times, [i] * len(times), col + '|', ms=8)
+            i += 0.01
+
+        min_t = min(t)
+        max_t = max(t)
+        ax.set_xticks(np.arange(min_t, max_t, 50.0))
+        ax.set_xlim(min_t, max_t)
+        ax.tick_params(labelsize=16)
+        ax.set_yticks([])
+        ax.set_xlabel('Time [ms]', fontsize=16)
+        ax.set_title(paramset, fontsize=24)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+
+    fig.suptitle("GC Inputs and MC/TC Events Across Paramsets", fontsize=20)
+    plt.show()
 
 def subplots_spikes(paramset, params_short=True):
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
@@ -358,19 +492,19 @@ def subplots_spikes(paramset, params_short=True):
     bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'TC', bin_edges=bin_edges)
     ax[1].set_xticks(np.arange(min_t, max_t, 50.0))
     ax[1].set_title('TC Spike Histogram', fontsize=16)
-    plot_spikes_hist(ax[1], bincenters, rates, col='magenta', linewidth=2)
+    #plot_spikes_hist(ax[1], bincenters, rates, col='magenta', linewidth=2)
 
     # MC spikes
     bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'MC', bin_edges=bin_edges)
     ax[2].set_xticks(np.arange(min_t, max_t, 50.0))
     ax[2].set_title('MC Spike Histogram', fontsize=16)
-    plot_spikes_hist(ax[2], bincenters, rates, col='blue', linewidth=2)
+    #plot_spikes_hist(ax[2], bincenters, rates, col='blue', linewidth=2)
 
     # GC spikes
     bincenters, rates = get_spikes_hist(spiking_cells, spike_times_clean, 'GC', bin_edges=bin_edges)
     ax[3].set_xticks(np.arange(min_t, max_t, 50.0))
     ax[3].set_title('GC Spike Histogram', fontsize=16)
-    plot_spikes_hist(ax[3], bincenters, rates, col='orange', linewidth=2)
+    #plot_spikes_hist(ax[3], bincenters, rates, col='orange', linewidth=2)
 
     ax[3].set_xlabel('Simulation Time [ms]', fontsize=18)
     ax[1].set_xlim(min_t, max_t)  # Align x-axis for consistency
