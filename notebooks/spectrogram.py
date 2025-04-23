@@ -177,6 +177,17 @@ def plot_wavelet_stacked_paramsets(paramsets, lfp_pkl_file='lfp.pkl',
         cbar.update_ticks()
 
     fig.suptitle(f"Wavelet: {wavelet}, Scales: {num_scales}, Freq range: {freq_range}", fontsize=20)
+    # Add vertical grey dotted lines at sniff times
+    sniff_rate = 5  # Hz
+    t_sniff = int(1000 / sniff_rate)  # 200 ms
+    sniff_count = 9
+    setup_time = 50  # ms
+    sniff_times = [setup_time + i * t_sniff for i in range(sniff_count)]
+
+    for ax in axs:
+        for st in sniff_times:
+            ax.axvline(x=st, color='gray', linestyle='--', linewidth=1)
+        
     plt.show()
 
 
