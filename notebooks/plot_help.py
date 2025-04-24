@@ -5,6 +5,7 @@ import matplotlib.colors as mcolors
 import matplotlib.cm as cm
 from collections import Counter
 import json
+import re
 from load import *
 from spectrogram import *
 from wavelet import *
@@ -327,6 +328,77 @@ def subplots_mctc_activity(paramset, params_short=True, lfp_pkl_file='lfp.pkl', 
     plt.show()
 
 
+def subplots_lfp_with_odor_input(paramset, lfp_pkl_file='lfp.pkl'):
+    """
+    Visualizes raw and filtered LFP signals with vertical lines marking odor input times.
+
+    Parameters:
+    -----------
+    paramset : str
+        Parameter set name used to locate result files.
+    lfp_pkl_file : str
+        Filename for the LFP pickle file.
+    """
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+    
+    fig_width = 27
+    events, _, _, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        _, dt, _, _, _, params_dict = load_result(paramset, lfp_pkl_file)
+
+    if 'dt' in params_dict:
+        dt = params_dict['dt']
+    else:
+        dt = 0.1
+
+    # Extract centrifugal delay from paramset name
+    delay_match = re.search(r'_(\d+)delay', paramset)
+    delay = int(delay_match.group(1)) if delay_match else 0
+    print(f"Centrifugal input delay: {delay} ms")
+
+    # Create figure
+    fig, ax = plt.subplots(figsize=(fig_width, 6), constrained_layout=True)
+
+    # Ensure time matches length of LFP
+    t = t[:len(lfp)]
+
+    # Plot LFP signals (scaled for clarity)
+    ax.plot(t, lfp * 10000 + 200, label='Raw LFP', color='black')
+    ax.plot(t, lfp_bp_theta * 10000 - 7000, label='Theta', color='purple')
+    ax.plot(t, lfp_bp_beta * 10000 - 10000, label='Beta', color='blue')
+    ax.plot(t, lfp_bp_gamma * 10000 - 13000, label='Gamma', color='green')
+    #ax.plot(t, lfp_bp_hfo * 10000 - 16000, label='HFO', color='red')
+
+    # Add vertical grey dotted lines at sniff times
+    sniff_rate = 5  # Hz
+    t_sniff = int(1000 / sniff_rate)  # 200 ms
+    sniff_count = 9
+    setup_time = 50  # ms
+    sniff_times = [setup_time + i * t_sniff for i in range(sniff_count)]
+    centrif_times = [st + delay for st in sniff_times]
+
+    for st in sniff_times:
+        ax.axvline(x=st, color='gray', linestyle='--', linewidth=1)
+    for ct in centrif_times:
+        ax.axvline(x=ct, color='orange', linestyle='--', linewidth=1)
+
+    min_t = min(t)
+    max_t = max(t)
+    ax.set_xlim(min_t, max_t)
+    ax.set_xticks(np.arange(min_t, max_t, 50.0))
+    ax.set_yticks([])
+    ax.tick_params(labelsize=14)
+    ax.set_xlabel('Simulation Time [ms]', fontsize=18)
+    ax.legend(loc='upper right', fontsize=14)
+    ax.set_title(paramset, fontsize=18)
+
+    # Clean up plot frame
+    for spine in ['top', 'right', 'left']:
+        ax.spines[spine].set_visible(False)
+
+    plt.show()
+    
+
+
 def subplots_inputs(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
     
@@ -477,7 +549,7 @@ def subplots_spikes(paramset, params_short=True):
         params_title = params_list
 
     # Adjust height ratios
-    fig, ax = plt.subplots(4, 1, gridspec_kw={'height_ratios': [8, 1, 1, 1]}, figsize=(fig_width, len(vs) * 0.12 + 5 * 3))
+    fig, ax = plt.subplots(4, 1, gridspec_kw={'height_ratios': [8, 1, 1, 1]}, figsize=(fig_width, 24))
 
     min_t = min(t)
     max_t = max(t)
@@ -492,21 +564,21 @@ def subplots_spikes(paramset, params_short=True):
     # TC spikes
     t_tc, rate_smoothed_tc = get_inst_firing_rate(spiking_cells, spike_times_clean, cell_type='TC', dt=dt, duration=max_t, sigma_ms=sigma)
     plot_inst_firing_rate(ax[1], t_tc, rate_smoothed_tc, col='magenta', linewidth=2, label=None)
-    ax[1].set_xticks(np.arange(min_t, max_t, 50.0))
+    ax[1].set_xticks(np.arange(min_t, max_t, 50.0), fontsize=14)
     ax[1].set_title('TC Instantaneous Firing Rate (Hz)', fontsize=16)
     #plot_spikes_hist(ax[1], bincenters, rates, col='magenta', linewidth=2)
 
     # MC spikes
     t_mc, rate_smoothed_mc = get_inst_firing_rate(spiking_cells, spike_times_clean, cell_type='MC', dt=dt, duration=max_t, sigma_ms=sigma)
     plot_inst_firing_rate(ax[2], t_mc, rate_smoothed_mc, col='blue', linewidth=2, label=None)
-    ax[2].set_xticks(np.arange(min_t, max_t, 50.0))
+    ax[2].set_xticks(np.arange(min_t, max_t, 50.0), fontsize=14)
     ax[2].set_title('MC Instantaneous Firing Rate (Hz)', fontsize=16)
     #plot_spikes_hist(ax[2], bincenters, rates, col='blue', linewidth=2)
 
     # GC spikes
     t_gc, rate_smoothed_gc = get_inst_firing_rate(spiking_cells, spike_times_clean, cell_type='GC', dt=dt, duration=max_t, sigma_ms=sigma)
     plot_inst_firing_rate(ax[3], t_gc, rate_smoothed_gc, col='orange', linewidth=2, label=None)
-    ax[3].set_xticks(np.arange(min_t, max_t, 50.0))
+    ax[3].set_xticks(np.arange(min_t, max_t, 50.0), fontsize=14)
     ax[3].set_title('GC Instantaneous Firing Rate (Hz)', fontsize=16)
     #plot_spikes_hist(ax[3], bincenters, rates, col='orange', linewidth=2)
 
@@ -514,6 +586,17 @@ def subplots_spikes(paramset, params_short=True):
     ax[1].set_xlim(min_t, max_t)  # Align x-axis for consistency
     ax[2].set_xlim(min_t, max_t)  # Align x-axis for consistency
     ax[3].set_xlim(min_t, max_t)  # Align x-axis for consistency
+
+    # Add vertical grey dotted lines at sniff times
+    sniff_rate = 5  # Hz
+    t_sniff = int(1000 / sniff_rate)  # 200 ms
+    sniff_count = 9
+    setup_time = 50  # ms
+    sniff_times = [setup_time + i * t_sniff for i in range(sniff_count)]
+
+    for a in ax:
+        for st in sniff_times:
+            a.axvline(x=st, color='gray', linestyle='--', linewidth=1)
 
     plt.tight_layout()
     plt.show()
