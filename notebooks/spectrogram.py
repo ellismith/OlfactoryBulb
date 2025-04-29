@@ -14,6 +14,7 @@ from scipy import signal
 from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
 import matplotlib.cm as cm
 import matplotlib.ticker as tkr
+from matplotlib import gridspec
 from load import *
 import pywt
 from wavelet import *
@@ -186,12 +187,81 @@ def plot_wavelet_stacked_paramsets(paramsets, lfp_pkl_file='lfp.pkl',
 
     for ax in axs:
         for st in sniff_times:
-            ax.axvline(x=st, color='gray', linestyle='--', linewidth=1)
+            ax.axvline(x=st, color='white', linestyle='--', linewidth=1)
+
         
     plt.show()
 
 
-def compute_verage(params_dict, t, lfp, dt_ms, wavelet, lowcut, highcut):
+def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
+                                   wavelet='cgau5', num_scales=50, freq_range=(20, 200),
+                                   scale_low=1, scale_high=200, vmin=None, vmax=0.35):
+    """
+    Vertically stacked wavelet spectrograms and spike/input tick plots.
+    Each paramset gets 2 rows: spectrogram and spike raster.
+    """
+    n = len(paramsets)
+    fig = plt.figure(figsize=(18, 4 * n))
+    spec = gridspec.GridSpec(n * 2, 1, height_ratios=[0.2, 1] * n, hspace=0.5)  # 2 rows per paramset
+
+    for i, paramset in enumerate(paramsets):
+        row_base = i * 2
+
+        # --- Load data ---
+        results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+        print(f"Loading: {paramset}")
+
+        events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+
+        # Compute wavelet transform
+        cfs, frequencies, wavelet_power = compute_wavelet_transform(
+            lfp, dt, num_scales=num_scales, wavelet=wavelet,
+            lowcut=freq_range[0], highcut=freq_range[1],
+            scale_low=scale_low, scale_high=scale_high
+        )
+
+        # --- Wavelet plot ---
+        ax_spec = fig.add_subplot(spec[row_base + 1, 0])
+        contour = ax_spec.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
+        ax_spec.set_xlim(min(t), max(t))
+        ax_spec.set_ylim(freq_range)
+        ax_spec.set_ylabel('Frequency [Hz]', fontsize=12)
+        ax_spec.set_xlabel('Time [ms]', fontsize=12)
+        ax_spec.set_title(f'{paramset}', fontsize=14)
+
+        # --- Input raster plot ---
+        ax_input = fig.add_subplot(spec[row_base, 0], sharex=ax_spec)
+        with open(os.path.join(paramset_dir, 'gc_input_times.pkl'), 'rb') as f:
+            gc_input_times = cPickle.load(f)
+        gc_input_times.sort(key=lambda row: row[0])
+
+        i_row = 0
+        for seg, times in gc_input_times:
+            ax_input.plot(times, [i_row] * len(times), '|', color='orange', ms=8)
+            i_row += 0.1
+        for seg, times in sorted(events.items()):
+            color = 'b' if 'MC' in seg else 'm' if 'TC' in seg else None
+            if color:
+                ax_input.plot(times, [i_row] * len(times), '|', color=color, ms=8)
+                i_row += 0.1
+
+        ax_input.set_yticks([])
+        ax_input.spines['top'].set_visible(False)
+        ax_input.spines['right'].set_visible(False)
+        ax_input.spines['left'].set_visible(False)
+        ax_input.set_ylabel('Inputs', fontsize=10)
+
+    # Colorbar and final layout
+    cbar_ax = fig.add_axes([0.92, 0.12, 0.015, 0.3])  # Adjust height from 0.75 to 0.3
+    fig.colorbar(contour, cax=cbar_ax, label='Wavelet Power')
+
+
+    fig.align_xlabels()
+    plt.show()
+
+
+def compute_average(params_dict, t, lfp, dt_ms, wavelet, lowcut, highcut):
     cfs, frequencies, lfp_wavelet_power  = compute_wavelet_transform(lfp, dt_ms, num_scales=50, wavelet=wavelet, lowcut=lowcut, highcut=highcut, \
                                 scale_low=10, scale_high=2000, bp_order=6, logscales=False)
         
