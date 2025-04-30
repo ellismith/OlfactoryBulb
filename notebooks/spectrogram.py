@@ -198,67 +198,110 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
                                    scale_low=1, scale_high=200, vmin=None, vmax=0.35):
     """
     Vertically stacked wavelet spectrograms and spike/input tick plots.
-    Each paramset gets 2 rows: spectrogram and spike raster.
+    Only the top subplot shows full input rasters.
+    Lower plots show per-sniff first input markers (white lines for M/TCs, asterisks for GCs).
     """
     n = len(paramsets)
     fig = plt.figure(figsize=(18, 4 * n))
-    spec = gridspec.GridSpec(n * 2, 1, height_ratios=[0.2, 1] * n, hspace=0.5)  # 2 rows per paramset
+    spec = gridspec.GridSpec(n * 2, 1, height_ratios=[0.5, 1] * n, hspace=0.1)
 
     for i, paramset in enumerate(paramsets):
         row_base = i * 2
-
-        # --- Load data ---
         results_dir, paramset_dir, fig_dir = get_dirs(paramset)
         print(f"Loading: {paramset}")
 
         events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
         lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
 
-        # Compute wavelet transform
+        sniff_rate = params_dict['sniff_rate']
+        t_sniff = int(1000 / sniff_rate)
+        total_sniffs = params_dict['sniff_count']
+
+        # Compute wavelet
         cfs, frequencies, wavelet_power = compute_wavelet_transform(
             lfp, dt, num_scales=num_scales, wavelet=wavelet,
             lowcut=freq_range[0], highcut=freq_range[1],
             scale_low=scale_low, scale_high=scale_high
         )
 
-        # --- Wavelet plot ---
         ax_spec = fig.add_subplot(spec[row_base + 1, 0])
         contour = ax_spec.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
         ax_spec.set_xlim(min(t), max(t))
-        ax_spec.set_ylim(freq_range)
-        ax_spec.set_ylabel('Frequency [Hz]', fontsize=12)
-        ax_spec.set_xlabel('Time [ms]', fontsize=12)
-        ax_spec.set_title(f'{paramset}', fontsize=14)
+        ax_spec.set_ylim(freq_range) #[0], freq_range[1] + 50)  # extend upper y-limit
+        ax_spec.set_ylabel('Frequency [Hz]', fontsize=16)
+        ax_spec.set_xlabel('Time [ms]', fontsize=16)
+        ax_spec.tick_params(axis='both', labelsize=14)
+        #ax_spec.set_title(f'{paramset}', fontsize=14, pad=15)  # increase pad to move it up
 
-        # --- Input raster plot ---
-        ax_input = fig.add_subplot(spec[row_base, 0], sharex=ax_spec)
+        # Load input times
         with open(os.path.join(paramset_dir, 'gc_input_times.pkl'), 'rb') as f:
             gc_input_times = cPickle.load(f)
-        gc_input_times.sort(key=lambda row: row[0])
 
-        i_row = 0
-        for seg, times in gc_input_times:
-            ax_input.plot(times, [i_row] * len(times), '|', color='orange', ms=8)
-            i_row += 0.1
-        for seg, times in sorted(events.items()):
-            color = 'b' if 'MC' in seg else 'm' if 'TC' in seg else None
-            if color:
-                ax_input.plot(times, [i_row] * len(times), '|', color=color, ms=8)
-                i_row += 0.1
+        # Top subplot: full raster
+        if i == 0:
+            ax_input = fig.add_subplot(spec[row_base, 0], sharex=ax_spec)
+            gc_input_times.sort(key=lambda row: row[0])
+            i_row = 0
+            for seg, times in gc_input_times:
+                ax_input.plot(times, [i_row] * len(times), '|', color='orange', ms=8)
+                i_row += 5
+            for seg, times in sorted(events.items()):
+                color = 'b' if 'MC' in seg else 'm' if 'TC' in seg else None
+                if color:
+                    ax_input.plot(times, [i_row] * len(times), '|', color=color, ms=8)
+                    i_row += 5
+            ax_input.set_yticks([])
+            ax_input.set_xticks([])
+            ax_input.spines['top'].set_visible(False)
+            ax_input.spines['right'].set_visible(False)
+            ax_input.spines['left'].set_visible(False)
+            ax_input.spines['bottom'].set_visible(False)
+            ax_input.set_ylabel('Inputs', fontsize=14)
+        else:
+            # Below top: single markers per sniff
+            # M/TC inputs: white vertical lines
+            mc_tc_times = []
+            for seg, times in events.items():
+                if 'MC' in seg or 'TC' in seg:
+                    mc_tc_times.extend(times)
+            mc_tc_times = sorted(mc_tc_times)
 
-        ax_input.set_yticks([])
-        ax_input.spines['top'].set_visible(False)
-        ax_input.spines['right'].set_visible(False)
-        ax_input.spines['left'].set_visible(False)
-        ax_input.set_ylabel('Inputs', fontsize=10)
+            first_mc_tc_per_sniff = []
+            for s in range(total_sniffs):  
+                sniff_start = s * t_sniff
+                sniff_end = (s + 1) * t_sniff
+                times_in_sniff = [time for time in mc_tc_times if sniff_start <= time < sniff_end]
+                if times_in_sniff:
+                    first_mc_tc_per_sniff.append(times_in_sniff[0])
 
-    # Colorbar and final layout
-    cbar_ax = fig.add_axes([0.92, 0.12, 0.015, 0.3])  # Adjust height from 0.75 to 0.3
+            for t_input in first_mc_tc_per_sniff:
+                ax_spec.axvline(t_input, color='white', linestyle='--', lw=2)
+
+            # GC inputs: orange asterisk
+            gc_flat_times = []
+            for seg, times in gc_input_times:
+                gc_flat_times.extend(times)
+            gc_flat_times = sorted(gc_flat_times)
+
+            first_gc_per_sniff = []
+            for s in range(total_sniffs):  
+                sniff_start = s * t_sniff
+                sniff_end = (s + 1) * t_sniff
+                times_in_sniff = [time for time in gc_flat_times if sniff_start <= time < sniff_end]
+                if times_in_sniff:
+                    first_gc_per_sniff.append(times_in_sniff[0])
+
+            y_pos = freq_range[1] + 10  # a bit above spectrogram
+            for t_input in first_gc_per_sniff:
+                ax_spec.plot(t_input, y_pos, marker='*', color='orange', markersize=25, clip_on=False)
+
+    # Add colorbar
+    cbar_ax = fig.add_axes([0.92, 0.12, 0.015, 0.3])
     fig.colorbar(contour, cax=cbar_ax, label='Wavelet Power')
-
 
     fig.align_xlabels()
     plt.show()
+
 
 
 def compute_average(params_dict, t, lfp, dt_ms, wavelet, lowcut, highcut):
