@@ -15,6 +15,7 @@ from scipy.signal import butter, coherence, lfilter, spectrogram, sosfilt, stft
 import matplotlib.cm as cm
 import matplotlib.ticker as tkr
 from matplotlib import gridspec
+import string
 from load import *
 import pywt
 from wavelet import *
@@ -203,7 +204,7 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
     """
     n = len(paramsets)
     fig = plt.figure(figsize=(18, 4 * n))
-    spec = gridspec.GridSpec(n * 2, 1, height_ratios=[0.5, 1] * n, hspace=0.1)
+    spec = gridspec.GridSpec(n * 2, 1, height_ratios=[0.3, 1] * n)
 
     for i, paramset in enumerate(paramsets):
         row_base = i * 2
@@ -228,9 +229,13 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
         contour = ax_spec.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
         ax_spec.set_xlim(min(t), max(t))
         ax_spec.set_ylim(freq_range) #[0], freq_range[1] + 50)  # extend upper y-limit
-        ax_spec.set_ylabel('Frequency [Hz]', fontsize=16)
-        ax_spec.set_xlabel('Time [ms]', fontsize=16)
-        ax_spec.tick_params(axis='both', labelsize=14)
+        ax_spec.set_ylabel('Frequency [Hz]', fontsize=20)
+        ax_spec.set_xlabel('Time [ms]', fontsize=20)
+        ax_spec.set_xticks(np.arange(min(t), max(t), 100.0))
+        tick_start = np.ceil(freq_range[0] / 20) * 20
+        tick_end = np.floor(freq_range[1] / 20) * 20
+        ax_spec.set_yticks(np.arange(tick_start, tick_end + 1, 20))
+        ax_spec.tick_params(axis='both', labelsize=16)
         #ax_spec.set_title(f'{paramset}', fontsize=14, pad=15)  # increase pad to move it up
 
         # Load input times
@@ -256,7 +261,7 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
             ax_input.spines['right'].set_visible(False)
             ax_input.spines['left'].set_visible(False)
             ax_input.spines['bottom'].set_visible(False)
-            ax_input.set_ylabel('Inputs', fontsize=14)
+            ax_input.set_ylabel('Odor Inputs', fontsize=16)
         else:
             # Below top: single markers per sniff
             # M/TC inputs: white vertical lines
@@ -291,13 +296,17 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
                 if times_in_sniff:
                     first_gc_per_sniff.append(times_in_sniff[0])
 
-            y_pos = freq_range[1] + 10  # a bit above spectrogram
+            y_pos = freq_range[1] + 12  # a bit above spectrogram
             for t_input in first_gc_per_sniff:
                 ax_spec.plot(t_input, y_pos, marker='*', color='orange', markersize=25, clip_on=False)
 
     # Add colorbar
     cbar_ax = fig.add_axes([0.92, 0.12, 0.015, 0.3])
-    fig.colorbar(contour, cax=cbar_ax, label='Wavelet Power')
+    # Create the colorbar
+    cbar = fig.colorbar(contour, cax=cbar_ax)
+
+    # Set the label with desired font size
+    cbar.set_label('Wavelet Power [$V^2/Hz$]', fontsize=14)
 
     fig.align_xlabels()
     plt.show()
