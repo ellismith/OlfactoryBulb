@@ -95,10 +95,6 @@ def show_subplot(paramset, params_short=True, lfp_pkl_file='lfp.pkl'):
     # plt.subplots(figsize=(fig_width, len(vs)*0.1))
 
 
-    glomcell_list1 = ['MC4[0]', 'MC5[0]', 'MC5[4]', 'MC5[14]', 'TC5[0]', 'TC4[0]', 'TC4[6]', 'TC4[8]', 'TC5[18]', 'TC5[20]']
-
-    glomcell_list2 = ['MC5[2]', 'MC5[6]', 'MC5[8]', 'MC5[10]', 'MC5[12]', 'MC4[2]', 'TC3[0]', 'TC4[2]', 'TC5[2]', 'TC4[4]', 'TC5[4]', 'TC3[2]', 'TC5[6]', 'TC5[8]', 'TC5[10]', 'TC3[4]', 'TC4[10]', 'TC3[6]', 'TC5[12]', 'TC5[14]', 'TC4[12]', 'TC5[16]', 'TC4[14]', 'TC4[16]']
-
     for cell, t, v in vs:
         
         if 'MC' in cell:
@@ -327,6 +323,116 @@ def subplots_mctc_activity(paramset, params_short=True, lfp_pkl_file='lfp.pkl', 
     
     plt.show()
 
+def subplots_mctc_spectro(paramset, params_short=True, lfp_pkl_file='lfp.pkl',
+                           nperseg=1024, lowcut=30, highcut=80, order=5,
+                           wavelet='cmor1.5-1.0', num_scale=50, freq_range=(10, 200),
+                           scale_low=1, scale_high=128, bp_order=5, vmin=None, vmax=None):
+    """
+    Visualizes spike data, LFP signals, and a wavelet spectrogram.
+    """
+
+    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
+    print("results_dir:", results_dir)
+
+    fig_width = 27
+    events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset, lfp_pkl_file)
+    print("lfp_pkl_file:", lfp_pkl_file)
+
+    if 'dt' in params_dict:
+        dt = params_dict['dt']
+    else:
+        dt = 0.1
+
+    params_list, params_filename = get_params(paramset)
+
+    if params_short:
+        params_title = params_filename
+    else:
+        params_title = params_list
+
+    # 3 subplots: spikes, raw LFP, spectrogram
+    fig, axs = plt.subplots(3, 1, figsize=(fig_width, 30),
+                            gridspec_kw={'height_ratios': [3, 0.5, 1]},
+                            constrained_layout=True)
+
+    # Plot spike traces
+    i = 0
+    for cell, t_v, v in vs:
+        if 'MC' in cell:
+            col = 'blue'
+        elif 'TC' in cell:
+            col = 'magenta'
+        else:
+            continue
+        axs[0].plot(t_v, np.array(v) + i, col, linestyle='-', label=cell)
+        i += 100
+
+    # Plot spike events
+    events = [(seg, times) for seg, times in events.items()]
+    events.sort(key=lambda row: row[0])
+
+    for seg, times in events:
+        if 'MC' in seg:
+            col = 'b'
+        elif 'TC' in seg:
+            col = 'm'
+        else:
+            continue
+        axs[0].plot(times, [i]*len(times), col+'|', ms=5, label=seg)
+        i += 10
+
+    axs[0].set_xticks(np.arange(min(t), max(t), 200.0))
+    axs[0].tick_params(labelsize=20)
+    axs[0].margins(0)
+    axs[0].set_yticks([])
+    axs[0].spines['top'].set_visible(False)
+    axs[0].spines['right'].set_visible(False)
+    axs[0].spines['left'].set_visible(False)
+    axs[0].set_xlabel('Simulation Time [ms]', fontsize=24)
+    axs[0].set_xlim(min(t), max(t))
+    #axs[0].set_title("Spike Activity", fontsize=20)
+
+    # Plot raw LFP trace
+    t = t[:len(lfp)]  # Align t with LFP length
+    axs[1].margins(0)
+    axs[1].plot(t, lfp * 10000 + 200, label='raw', color='black')
+    axs[1].set_xlim(min(t), max(t))
+    #axs[1].set_xlabel('Simulation Time [ms]', fontsize=20)
+    #axs[1].set_title("Raw LFP", fontsize=20)
+    #axs[1].tick_params(labelsize=20)
+    axs[1].spines['top'].set_visible(False)
+    axs[1].spines['right'].set_visible(False)
+    axs[1].spines['left'].set_visible(False)
+    axs[1].spines['bottom'].set_visible(False)
+
+    # Compute wavelet transform
+    cfs, frequencies, wavelet_power = compute_wavelet_transform(
+        lfp, dt, num_scales=num_scale, wavelet=wavelet,
+        lowcut=freq_range[0], highcut=freq_range[1],
+        scale_low=scale_low, scale_high=scale_high, bp_order=bp_order
+    )
+
+    # Spectrogram
+    contour = axs[2].contourf(t, frequencies, wavelet_power, 256,
+                              vmin=vmin, vmax=vmax, cmap='jet')
+    axs[2].set_xlim(min(t), max(t))
+    axs[2].set_ylim(freq_range)
+    axs[2].set_xlabel('Simulation Time [ms]', fontsize=24)
+    axs[2].set_ylabel('Frequency [Hz]', fontsize=24)
+    #axs[2].set_title(f"Wavelet: {wavelet}, Scales: {num_scale}, Freq range: {freq_range}, BP Order: {bp_order}", fontsize=20)
+    axs[2].tick_params(labelsize=20)
+
+    # Add colorbar
+    cbar = plt.colorbar(contour, ax=axs[2], pad=0.02)
+    cbar.set_label('Wavelet Power', fontsize=20)
+    cbar.ax.tick_params(labelsize=20)
+    cbar.formatter = tkr.FormatStrFormatter('%.2f')
+    cbar.update_ticks()
+
+    plt.show()
+
+
 
 def subplots_lfp_with_odor_input(paramset, lfp_pkl_file='lfp.pkl'):
     """
@@ -353,7 +459,7 @@ def subplots_lfp_with_odor_input(paramset, lfp_pkl_file='lfp.pkl'):
     # Extract centrifugal delay from paramset name
     delay_match = re.search(r'_(\d+)delay', paramset)
     delay = int(delay_match.group(1)) if delay_match else 0
-    print(f"Centrifugal input delay: {delay} ms")
+    #print(f"Centrifugal input delay: {delay} ms")
 
     # Create figure
     fig, ax = plt.subplots(figsize=(fig_width, 6), constrained_layout=True)
@@ -363,9 +469,9 @@ def subplots_lfp_with_odor_input(paramset, lfp_pkl_file='lfp.pkl'):
 
     # Plot LFP signals (scaled for clarity)
     ax.plot(t, lfp * 10000 + 200, label='Raw LFP', color='black')
-    ax.plot(t, lfp_bp_theta * 10000 - 7000, label='Theta', color='purple')
-    ax.plot(t, lfp_bp_beta * 10000 - 10000, label='Beta', color='blue')
-    ax.plot(t, lfp_bp_gamma * 10000 - 13000, label='Gamma', color='green')
+    #ax.plot(t, lfp_bp_theta * 10000 - 7000, label='Theta', color='purple')
+    ax.plot(t, lfp_bp_beta * 10000 - 7000, label='Beta', color='blue')
+    ax.plot(t, lfp_bp_gamma * 10000 - 10000, label='Gamma', color='green')
     #ax.plot(t, lfp_bp_hfo * 10000 - 16000, label='HFO', color='red')
 
     # Add vertical grey dotted lines at sniff times
@@ -389,7 +495,7 @@ def subplots_lfp_with_odor_input(paramset, lfp_pkl_file='lfp.pkl'):
     ax.tick_params(labelsize=14)
     ax.set_xlabel('Simulation Time [ms]', fontsize=18)
     ax.legend(loc='upper right', fontsize=14)
-    ax.set_title(paramset, fontsize=18)
+    ax.set_title(paramset, fontsize=22)
 
     # Clean up plot frame
     for spine in ['top', 'right', 'left']:
@@ -560,7 +666,7 @@ def subplots_spikes(paramset, params_short=True):
     spiking_cells, spike_times_clean = get_spiking_cells(spike_times)
     bin_edges = np.arange(min_t, max_t, 50)  # Adjusted bin range
 
-    sigma=10
+    sigma=25
     # TC spikes
     t_tc, rate_smoothed_tc = get_inst_firing_rate(spiking_cells, spike_times_clean, cell_type='TC', dt=dt, duration=max_t, sigma_ms=sigma)
     plot_inst_firing_rate(ax[1], t_tc, rate_smoothed_tc, col='magenta', linewidth=2, label=None)
@@ -683,6 +789,7 @@ def plot_cells_with_odor_inputs(slices_dir, paramset='GammaSignature_SetupTime')
     ax.set_ylabel("Count")
     ax.set_title("Cells connected to each glomerulus")
     ax.legend(title="Glomerulus ID")
+    
 
     plt.show()
 
