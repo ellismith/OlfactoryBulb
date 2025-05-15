@@ -7,6 +7,7 @@ try:
 except:
     import pickle as cPickle
 
+import math
 import os
 import yaml
 from pylab import * 
@@ -161,6 +162,52 @@ def calculate_psd_and_dominant_frequency(signal, dt_ms, freq_range=(15, 200), np
         dom_power = None
 
     return freqs_filtered, psd_filtered, dom_freq, dom_power, peak_freqs, peak_powers
+
+
+
+def plot_psd_bands_for_paramsets(paramsets, nperseg=1024):
+    """
+    For each paramset, load the result and plot beta and gamma band PSDs.
+
+    Parameters:
+    - paramsets: list of paramset names (strings) to load via `load_result`
+    - nperseg: segment length for Welch's method (default: 1024)
+    """
+    fig, axs = plt.subplots(len(paramsets), 2, figsize=(12, 4 * len(paramsets)))
+
+    for i, paramset in enumerate(paramsets):
+        # Load data
+        events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+
+        # Beta band PSD
+        freqs_beta, psd_beta, dom_freq_beta, _, _, _ = calculate_psd_and_dominant_frequency(
+            lfp, dt, freq_range=(13, 30), nperseg=nperseg
+        )
+        axs[i, 0].plot(freqs_beta, psd_beta, color='darkorange')
+        axs[i, 0].set_title(f"{paramset} - Beta (13–30 Hz)")
+        axs[i, 0].set_xlabel("Frequency (Hz)")
+        axs[i, 0].set_ylabel("Power")
+        axs[i, 0].grid(True)
+        if dom_freq_beta:
+            axs[i, 0].axvline(dom_freq_beta, color='gray', linestyle='--', label=f'Dom: {dom_freq_beta:.1f} Hz')
+            axs[i, 0].legend()
+
+        # Gamma band PSD
+        freqs_gamma, psd_gamma, dom_freq_gamma, _, _, _ = calculate_psd_and_dominant_frequency(
+            lfp, dt, freq_range=(30, 100), nperseg=nperseg
+        )
+        axs[i, 1].plot(freqs_gamma, psd_gamma, color='purple')
+        axs[i, 1].set_title(f"{paramset} - Gamma (30–100 Hz)")
+        axs[i, 1].set_xlabel("Frequency (Hz)")
+        axs[i, 1].set_ylabel("Power")
+        axs[i, 1].grid(True)
+        if dom_freq_gamma:
+            axs[i, 1].axvline(dom_freq_gamma, color='gray', linestyle='--', label=f'Dom: {dom_freq_gamma:.1f} Hz')
+            axs[i, 1].legend()
+
+    plt.tight_layout()
+    plt.show()
 
 
 
@@ -332,10 +379,10 @@ def calculate_power_during_inhale_periods(lfp_signal, dt_ms, sniff_duration, inh
 
 
 def plot_power_or_psd(signals, dt_ms, window_size=1024, step_size=256, freq_range=(15, 200),
-                      colors=None, labels=None, mode='time'):
+                      colors=None, labels=None, mode='time', ax=None):
     """
     Plot either power over time or power spectral density (PSD) for multiple signals.
-    
+
     Parameters:
     - signals: List of 1D NumPy arrays, input signals.
     - dt_ms: Time step in milliseconds.
@@ -345,11 +392,18 @@ def plot_power_or_psd(signals, dt_ms, window_size=1024, step_size=256, freq_rang
     - colors: List of colors for each signal.
     - labels: List of labels for each signal.
     - mode: 'time' to plot power over time; 'psd' to plot PSD.
+    - ax: Optional matplotlib Axes object for subplotting.
     """
+    import matplotlib.pyplot as plt
+    from scipy.signal import welch
+    import numpy as np
+
     fs = 1000.0 / dt_ms
     n_samples = len(signals[0])
 
-    plt.figure(figsize=(12, 8))
+    # Create new figure and axes if not provided
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(12, 8))
 
     for i, signal in enumerate(signals):
         color = colors[i] if colors else f"C{i}"
@@ -366,25 +420,90 @@ def plot_power_or_psd(signals, dt_ms, window_size=1024, step_size=256, freq_rang
                 power = np.sum(psd[freq_mask])
                 power_over_time.append(power)
 
-            plt.plot(times, power_over_time, color=color, label=label)
-            plt.xlabel("Time (s)")
-            plt.ylabel("Power (V²/Hz)")
-            plt.title("Power Over Time – Welch Method")
+            ax.plot(times, power_over_time, color=color, label=label)
+            ax.set_xlabel("Time (s)")
+            ax.set_ylabel("Power (V²/Hz)")
+            ax.set_title("Power Over Time – Welch Method")
 
         elif mode == 'psd':
             freqs, psd = welch(signal, fs=fs, nperseg=window_size, noverlap=window_size//2)
             freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-            plt.plot(freqs[freq_mask], psd[freq_mask], color=color, label=label)
-            plt.xlabel("Frequency (Hz)")
-            plt.ylabel("Power Spectral Density (V²/Hz)")
-            plt.title("Power Spectral Density – Welch Method")
+            ax.plot(freqs[freq_mask], psd[freq_mask], color=color, label=label)
+            ax.set_xlabel("Frequency (Hz)")
+            ax.set_ylabel("Power Spectral Density (V²/Hz)")
+            ax.set_title("Power Spectral Density – Welch Method")
 
         else:
             raise ValueError("Invalid mode. Choose 'time' or 'psd'.")
 
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    ax.legend()
+    if ax is None:
+        plt.tight_layout()
+        plt.show()
+
+
+
+def plot_band_power_for_paramsets(paramsets, mode='psd', xlim=[130, 200], use_subplots=False):
+    """
+    Load and plot LFP power in a given frequency band across paramsets.
+
+    Parameters:
+    - paramsets: List of paramset names.
+    - mode: 'psd' or 'time'
+    - xlim: Frequency range to display on the plot (used for x-axis limits in 'psd' mode)
+    - use_subplots: If True, use separate subplots for each paramset (except the first)
+    """
+
+
+    # Load LFP data
+    lfp_all, t_all = load_results_for_comparison(paramsets)
+    dt_ms = t_all[0][1] - t_all[0][0]  # assumes uniform dt in ms
+
+    # If subplots requested
+    if use_subplots:
+        n = len(paramsets) - 1
+        ncols = 2
+        nrows = int(np.ceil(n / ncols))
+        fig, axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(12, 4 * nrows))
+        axs = axs.flatten()  # so we can index easily even if 1 row
+
+        for i, param in enumerate(paramsets[1:]):
+            ax = axs[i]
+            plot_power_or_psd(
+                signals=[lfp_all[0], lfp_all[i + 1]],
+                dt_ms=dt_ms,
+                freq_range=xlim,
+                colors=['black', 'red'],
+                labels=[paramsets[0], param],
+                mode=mode,
+                ax=ax
+            )
+            ax.set_title(f'{paramsets[0]} vs {param}', fontsize=12)
+
+        # Hide any unused subplots
+        for j in range(i + 1, len(axs)):
+            axs[j].axis('off')
+
+        plt.tight_layout()
+        plt.show()
+
+    else:
+        # Plot all paramsets on a single plot
+        default_colors = [d['color'] for d in plt.rcParams['axes.prop_cycle']]
+        colors = ['black'] + default_colors[:len(paramsets) - 1]
+
+        plot_power_or_psd(
+            signals=lfp_all,
+            dt_ms=dt_ms,
+            window_size=1024,
+            step_size=256,
+            freq_range=xlim,
+            colors=colors,
+            labels=paramsets,
+            mode=mode
+        )
+
+
 
 
 def plot_beta_gamma_comparison(paramsets, labels, params, label_with, method="full_time", metric="power"):
@@ -397,7 +516,7 @@ def plot_beta_gamma_comparison(paramsets, labels, params, label_with, method="fu
     - metric: Metric to plot ("power", "amplitude", or "dominant_frequency")
     """
     # Load the results for each paramset
-    lfp_bp_beta_all, lfp_bp_gamma_all, t_all = load_results_for_comparison(paramsets)
+    lfp_bp_beta_all, lfp_bp_gamma_all, lfp_bp_hfo_all, t_all = load_results_for_comparison(paramsets)
 
     # Initialize lists to store selected metric values
     beta_values = []
@@ -430,12 +549,23 @@ def plot_beta_gamma_comparison(paramsets, labels, params, label_with, method="fu
     plt.plot(range(1, len(paramsets)), gamma_values[1:], color='green', marker='o', label='Gamma')
     
     # Customize the plot
+    # Customize the plot
     plt.xlabel(f"{label_with.capitalize()}", size=16)
-    plt.ylabel(f"Average {metric.capitalize()}", size=16)
-    plt.title(f"Comparison of Beta and Gamma {metric.capitalize()} Across Paramsets ({method}),\n{params}", pad=20, size=16)
+
+    # Choose y-axis label with units
+    if metric == "amplitude":
+        ylabel = f"Average {metric.capitalize()} [mV]"
+    elif metric == "dominant_frequency":
+        ylabel = f"Average {metric.capitalize()} [Hz]"
+    elif metric == "power":
+        ylabel = f"Average {metric.capitalize()} ($V^2$/Hz)"
+    else:
+        ylabel = f"Average {metric.capitalize()}"
+
+    plt.ylabel(ylabel, size=16)
+    plt.title(f"Comparison of Beta and Gamma {metric.capitalize()} Across Paramsets ({method})", pad=20, size=16)
     plt.xticks(range(len(paramsets)), labels, rotation=0, size=16)
     plt.yticks(size=16)
-    #plt.legend(loc="upper left")
     plt.grid(True)
 
     # Show the plot
@@ -545,7 +675,7 @@ def plot_psd_diff_ranges(paramset):
     freqs_list, psd_list, dom_freqs, dom_powers = [], [], [], []
 
     for sig in signals:
-        freqs_filtered, psd_filtered, dom_freq, dom_power, \
+        freqs, psd_filtered, dom_freq, dom_power, \
             peak_freqs, peak_powers = calculate_psd_and_dominant_frequency(sig, dt, nperseg=2048)
         freqs_list.append(freqs)
         psd_list.append(psd)
