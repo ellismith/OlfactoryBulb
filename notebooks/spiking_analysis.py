@@ -305,8 +305,12 @@ def plot_inst_firing_rate(ax, t, rate_smoothed, col='blue', linewidth=2, label=N
         Width of plotted line.
     """
     ax.plot(t, rate_smoothed, color=col, linewidth=linewidth, label=label)
-    ax.set_xlabel('Simulation Time [ms]', fontsize=18)
-    ax.set_ylabel('Inst. Rate [Hz]', fontsize=18)
+    ax.set_yticks(range(0, 25, 5))  # from 0 to 100 in steps of 5
+    ax.set_xlabel('Simulation Time [ms]', fontsize=20)
+    ax.set_ylabel('Inst. Rate [Hz]', fontsize=20)
+    ax.tick_params(axis='both', labelsize=16)
+    
+
 
 def plot_inst_rate_one_sniff(paramset, cell_type='MC', color='blue', sigma_values=[10], ax=None, label=None, sniff_num=3):
     if ax is None:
@@ -389,6 +393,7 @@ def plot_all_sniff_rates(paramsets, sniff_num=3, sigma=15, cell_types=['MC', 'TC
     plt.tight_layout()
     plt.show()
 
+
 def plot_all_sniff_rates_with_inputs(paramsets, sniff_num=3, sigma=15, cell_types=['MC', 'TC', 'GC'], colors=None):
     """
     Plot GC input events and cell-type-specific firing rates for multiple paramsets and a given sniff.
@@ -466,12 +471,153 @@ def plot_all_sniff_rates_with_inputs(paramsets, sniff_num=3, sigma=15, cell_type
                 sniff_num=sniff_num
             )
             ax.set_ylabel(f'{cell_type} Rate (Hz)', fontsize=12)
-            ax.set_ylim(0, 40)
+            ax.set_ylim(0, 70)
             ax.set_xticks(np.linspace(zoom_start, zoom_end, 5))
             if row_idx == nrows - 1:
                 ax.set_xlabel('Time (ms)')
             else:
                 ax.tick_params(labelbottom=True)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_firing_rate_across_paramsets(paramsets, labels, sigma=15, sniff_rate=5, cell_types=['TC', 'MC', 'GC']):
+    """
+    Plots instantaneous firing rate (σ = sigma ms) for TC, MC, and GC neurons
+    across sniff #4 for each paramset. The first paramset is plotted in black.
+    """
+    # Setup
+    colors_paramsets = get_colors_list()
+    colors_paramsets = [(0.0, 0.0, 0.0, 1.0)] + colors_paramsets  # First paramset black
+    nrows = len(cell_types)
+
+    fig, axes = plt.subplots(nrows, 1, figsize=(8,10), sharex=True)
+
+    # Define time window for sniff #4
+    t_sniff = 1000 / sniff_rate
+    zoom_start = 0 * t_sniff
+    zoom_end = 1 * t_sniff
+
+    for j, paramset in enumerate(paramsets):
+        # Load data
+        events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+            lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+
+        spiking_cells, spike_times_clean = get_spiking_cells(spike_times)
+
+        # Loop through cell types
+        for i, ct in enumerate(cell_types):
+            t, rate_smoothed = get_inst_firing_rate(
+                spiking_cells=spiking_cells,
+                spike_times_clean=spike_times_clean,
+                cell_type=ct,
+                dt=0.1,
+                duration=max(t),
+                sigma_ms=sigma
+            )
+
+            plot_inst_firing_rate(
+                ax=axes[i],
+                t=t,
+                rate_smoothed=rate_smoothed,
+                col=colors_paramsets[j % len(colors_paramsets)],
+                linewidth=2,
+                label=paramset
+            )
+
+            axes[i].set_title(f'{ct} Instantaneous Firing Rate', fontsize=20)
+            axes[i].set_ylim(0, 45)
+            axes[i].set_yticks(np.linspace(0, 50, 5), size=18)
+            axes[i].set_xlim(zoom_start, zoom_end)
+            #axes[i].legend(labels=labels, fontsize=10)
+            axes[i].set_ylabel('Rate (Hz)', fontsize=18)
+            axes[i].set_xticks(np.linspace(zoom_start, zoom_end, 5), size=18)
+            if i == nrows - 1:
+                axes[i].set_xlabel('Time (ms)', fontsize=18)
+            else:
+                axes[i].tick_params(labelbottom=True)
+
+    plt.tight_layout()
+    #fig.subplots_adjust(hspace=2)  # Increase vertical spacing between subplots
+    plt.show()
+
+
+def plot_sync_across_paramsets(paramsets, compare_within=True):
+    """
+    Computes and plots the average synchrony across multiple parameter sets.
+
+    Parameters:
+    - paramsets: List of parameter set names to load results from.
+    - compare_within: Boolean to decide if comparing synchrony within each cell type or between cell types.
+    """
+
+    cell_types = ['MC', 'TC', 'GC']
+    cell_type_colors = {'MC': 'blue', 'TC': 'magenta', 'GC': 'orange'}
+    hatches = ['', '/////', '/', '\\', 'x', '-', '+', '.', '*']
+    alpha_value = 0.4
+
+    all_avg_sync_values = []
+    all_group_names = []
+    paramset_labels = []
+
+    for paramset in paramsets:
+        events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
+    
+        groups = extract_spike_times_by_cell_type(spike_times, cell_types)
+        
+        t_start = t[0]
+        t_end = t[-1]
+        
+        synchrony_results = compute_synchrony(groups, cell_types=cell_types, 
+                                              compare_within=compare_within, t_start=t_start, t_end=t_end)
+
+        group_names = list(synchrony_results.keys())
+        vals = list(synchrony_results.values())
+        avg_sync_values = [val['y'] for val in vals]
+
+        # Sort by MC → TC → GC order
+        desired_order = ['MC', 'TC', 'GC']
+        sorted_tuples = sorted(zip(group_names, avg_sync_values),
+                               key=lambda x: desired_order.index(x[0].split('-')[0]))
+        sorted_group_names, sorted_avg_sync_values = zip(*sorted_tuples)
+
+        all_group_names.append(sorted_group_names)
+        all_avg_sync_values.append(sorted_avg_sync_values)
+        paramset_labels.append(paramset)
+
+    base_group_names = all_group_names[0]
+    n_groups = len(base_group_names)
+    n_paramsets = len(paramsets)
+    x = np.arange(n_groups)
+    width = 0.8 / n_paramsets  # bar width
+
+    plt.figure(figsize=(8, 6))
+    for i in range(n_paramsets):
+        avg_sync_values = all_avg_sync_values[i]
+        hatch = hatches[i % len(hatches)]
+        color = [cell_type_colors.get(name.split('-')[0], 'gray') for name in base_group_names]
+
+        # Create bars with hatching and color
+        plt.bar(x + i * width, avg_sync_values, width,
+                color=color, edgecolor='black', hatch=hatch, linewidth=2, label=paramsets[i], alpha=alpha_value)
+
+    plt.xlabel("Group", size=20)
+    plt.ylabel("Average Synchrony", size=20)
+    plt.ylim(0, 1)
+    plt.title("Average Synchrony Across Paramsets", size=18)
+    plt.xticks(x + width * (n_paramsets - 1) / 2, base_group_names, fontsize=14)
+    plt.yticks(fontsize=14)
+
+    # Create custom patches for the legend to match the hatching
+    legend_patches = []
+    for i, hatch in enumerate(hatches[:n_paramsets]):
+        color = 'blue'
+        legend_patches.append(Patch(color=color[0], hatch=hatch, label=paramsets[i], alpha=alpha_value))
+
+    # Create legend with the custom patches
+    plt.legend(handles=legend_patches, loc='upper right', fontsize=16)
 
     plt.tight_layout()
     plt.show()
@@ -758,7 +904,7 @@ def plot_avg_spike_rate_change_for_all(paramsets):
     plt.show()
 
 
-def plot_firing_rates(group_firing_rates, title="Spike Rates by Cell Type"):
+def plot_firing_rates(group_firing_rates):
     """
     Plots the firing rates for each cell group.
 
@@ -778,22 +924,31 @@ def plot_firing_rates(group_firing_rates, title="Spike Rates by Cell Type"):
     # Plot
     plt.figure(figsize=(10, 5))
     plt.bar(sorted_groups, firing_rates, color=bar_colors)
-    plt.xlabel("Cell Group")
-    plt.ylabel("Firing Rate (Hz)")
-    plt.title(title)
+    plt.xlabel("Cell Model Type")
+    plt.ylabel("Firing Rate [Hz]")
+    plt.title("Average Firing Rates by Cell Model Type")
     plt.xticks(rotation=0)  # Keep labels horizontal
     plt.grid(axis="y", linestyle="--", alpha=0.7)
+    
     plt.show()
 
 
 def plot_group_firing_rates_by_cell_type(paramsets):
     """
-    Compares average firing rates per group across paramsets using dot plots.
-    First paramset is black; others use distinct colors from the default matplotlib color cycle.
+    Plots average firing rates per group.
+
+    If one paramset is provided, shows a color-coded bar graph by cell type:
+        - MC: blue
+        - TC: magenta
+        - GC: orange
+    If multiple paramsets are provided, shows dot plots with distinct colors.
 
     Parameters:
-    paramsets (list of str): List of paramset names to load and analyze.
+    paramsets (str or list of str): Single paramset name or list of names.
     """
+    if isinstance(paramsets, str):
+        paramsets = [paramsets]
+
     assert len(paramsets) > 0, "paramsets list cannot be empty."
 
     all_group_rates = {}
@@ -807,29 +962,78 @@ def plot_group_firing_rates_by_cell_type(paramsets):
         group_rates = get_group_firing_rates(spike_times, dt)
         all_group_rates[paramset] = group_rates
 
-    # Get all unique groups and sort for consistent x-axis
-    all_groups = sorted(set(group for rates in all_group_rates.values() for group in rates))
+    # Custom sort: TCs first, then MCs, then GCs
+    def cell_type_sort_key(group_name):
+        if group_name.startswith("TC"):
+            return (0, group_name)
+        elif group_name.startswith("MC"):
+            return (1, group_name)
+        elif group_name.startswith("GC"):
+            return (2, group_name)
+        else:
+            return (3, group_name)  # unknown types go last
+
+    all_groups = sorted(set(group for rates in all_group_rates.values() for group in rates),
+                        key=cell_type_sort_key)
+
+    
     x = range(len(all_groups))
-    offset = 0.1
 
-    # Get full color cycle (excluding black for now)
-    #default_colors = [d['color'] for d in plt.rcParams['axes.prop_cycle']]
-    paramset_colors = get_colors_list()
-    paramset_colors = [(0.0, 0.0, 0.0, 1.0)] + paramset_colors # First paramset black
-
-    plt.figure(figsize=(10, 6))
-
-    for i, paramset in enumerate(paramsets):
+    if len(paramsets) == 1:
+        # Bar plot with color by cell type
+        paramset = paramsets[0]
         rates = [all_group_rates[paramset].get(group, 0) for group in all_groups]
-        x_positions = [xi + (i - len(paramsets) / 2) * offset for xi in x]
-        plt.scatter(x_positions, rates, color=paramset_colors[i], label=paramset, s=50)
 
-    plt.xticks(x, all_groups, fontsize=12)
-    plt.ylabel("Firing Rate (Hz)", fontsize=12)
-    plt.title("Group Firing Rates by Cell Type Across Paramsets", fontsize=14)
-    plt.legend(title="Paramset")
-    plt.tight_layout()
-    plt.show()
+        # Define color by group prefix
+        def get_color(group):
+            if group.startswith("TC"):
+                return "magenta"
+            elif group.startswith("MC"):
+                return "blue"
+            elif group.startswith("GC"):
+                return "orange"
+            else:
+                return "gray"
+
+        colors = [get_color(group) for group in all_groups]
+
+        plt.figure(figsize=(10, 6))
+        plt.bar(x, rates, color=colors)
+        all_groups = ['TC1', 'TC2', 'TC3', 'MC1', 'MC2', 'MC3', 'GC1', 'GC2', 'GC3']
+        plt.xticks(x, all_groups, fontsize=20)
+        plt.yticks(np.arange(0,50,10), fontsize=20)
+        plt.xlabel("Cell Model Type", fontsize=22)
+        plt.ylabel("Average Firing Rate [Hz]", fontsize=22)
+        plt.title(f"Average Group Firing Rates by Cell Model Type", fontsize=24)
+        plt.tight_layout()
+        # save as png
+        base_dir = os.path.abspath(os.path.join(os.getcwd(), ".."))
+        save_path = os.path.join(base_dir, "plots")
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)  # Ensure the folder exists
+        filename = os.path.join(save_path, f"group_firingrates_{paramset}.png")
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        print(f"Saved to: {os.path.abspath(filename)}")
+
+        plt.show()
+
+    else:
+        # Dot plot for multiple paramsets
+        offset = 0.1
+        paramset_colors = get_colors_list()
+        paramset_colors = [(0.0, 0.0, 0.0, 1.0)] + paramset_colors  # First paramset black
+
+        plt.figure(figsize=(10, 6))
+        for i, paramset in enumerate(paramsets):
+            rates = [all_group_rates[paramset].get(group, 0) for group in all_groups]
+            x_positions = [xi + (i - len(paramsets) / 2) * offset for xi in x]
+            plt.scatter(x_positions, rates, color=paramset_colors[i], label=paramset, s=50)
+
+        plt.xticks(x, all_groups, fontsize=12)
+        plt.ylabel("Firing Rate (Hz)", fontsize=12)
+        plt.title("Group Firing Rates by Cell Type Across Paramsets", fontsize=14)
+        plt.legend(title="Paramset")
+        plt.tight_layout()
+        plt.show()
 
 
 def plot_spikes_dots(spike_times):
@@ -959,7 +1163,7 @@ def plot_spikes_raster(spike_times, ax):
         cell_type_positions[cell_type].append(i)
         i += 1  # Increment only for spiking neurons
 
-    ax.set_xlabel('Simulation Time [ms]', fontsize=14)
+    ax.set_xlabel('Simulation Time [ms]', fontsize=16)
     ax.set_yticks([])  # Remove y-tick labels
 
     # Add custom y-axis labels with larger font size
