@@ -52,7 +52,7 @@ debug_cells = True
 #     return apic_list
 
 # # Set the seed for reproducibility
-#random.seed(42)
+seed(42)
 
 # # define directory where slice .json files are located and slice name
 slices_dir = os.path.join('/home/ellismith/OlfactoryBulb-1/olfactorybulb/slices_local')
@@ -155,7 +155,7 @@ class OlfactoryBulb:
                     [setattr(s, syn_attrib, attrib_value) for s in getattr(h, syn_mech)]
 
        
-        centrif_inputsegs = get_random_apics(n_segs=50)
+        centrif_inputsegs = get_random_apics(n_segs=100)
                                         
         print("len(centrif_inputsegs):", len(centrif_inputsegs))
     
@@ -855,7 +855,7 @@ class OlfactoryBulb:
         h = self.h
 
         centrif_duration = 1800
-        centrif_delay = 80
+        #centrif_delay = 80
         setup_time = self.params.sim_setup_time
 
         gc_input_segs = self.assign_centrif_ranks(centrif_inputsegs)  # Get formatted segment info
@@ -864,7 +864,7 @@ class OlfactoryBulb:
             print("No valid GC segments found for centrifugal input.")
             return
 
-        print("Stimulating GCs with delay", centrif_delay, "ms")
+        print("Stimulating GCs ")
 
         for seg_address, single_rank_gid, single_rank_address in gc_input_segs:
             try:
@@ -876,9 +876,9 @@ class OlfactoryBulb:
             syn = self.h.Exp2Syn(seg)
             syn.tau1 = self.params.input_syn_tau1
             syn.tau2 = self.params.input_syn_tau2
-            centrif_delay = 80
-            centrif_weight = 0.9
-            spike_times = self.get_constant_spike_train(start_time=centrif_delay, duration=centrif_duration, frequency=5, jitter=20)
+            centrif_delay =105
+            centrif_weight = 0.5
+            spike_times = self.get_constant_spike_train(start_time=centrif_delay, duration=centrif_duration, frequency=5, jitter=5)
             base_frequency = 20  # Hz (gamma-range firing)
             mod_frequency = 5  # Hz (sniff-driven modulation)
             #spike_times = self.get_sinusoidal_spike_train(setup_time, centrif_duration, \
