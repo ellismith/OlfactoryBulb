@@ -24,6 +24,10 @@ def smooth_psd(psd, window_len=5):
     window = np.ones(window_len) / window_len
     return np.convolve(psd, window, mode='same')
 
+def band_power(freqs, psd, band):
+    band_mask = (freqs >= band[0]) & (freqs <= band[1])
+    return np.trapz(psd[band_mask], freqs[band_mask])  # area under curve
+
 ############### STATISTICAL ANALYSIS ###############
 
 def run_wilcoxon_and_print(power1, power2, label1='Set1', label2='Set2'):
@@ -538,21 +542,18 @@ def plot_band_power_for_paramsets(paramsets, mode='psd', xlim=[130, 200], use_su
                 ymax= max_psd*1.2
             )
             
-            # Wilcoxon test between paramset 0 and current paramset
-            a, b = psd_results
-            print("n = ", len(psd_results))
 
-            from scipy.stats import wilcoxon
-            stat, p_value = wilcoxon(a, b)
+            a, b = psd_results  # These are the PSD curves for signals A and B
+            f = freq_results    # Frequencies corresponding to PSDs
+            band = xlim     # gamma, for example
 
-            print(f"Wilcoxon statistic: {stat}")
-            print(f"P-value: {p_value:.4e}")
+            auc_a = band_power(f, a, band)
+            auc_b = band_power(f, b, band)
 
-            alpha = 0.05
-            if p_value < alpha:
-                print("Result is statistically significant (p < 0.05)")
-            else:
-                print("Result is not statistically significant (p ≥ 0.05)")
+            print(f"Band power ({band[0]}-{band[1]} Hz): A = {auc_a:.3e}, B = {auc_b:.3e}")
+            print(f"Relative difference: {(auc_b - auc_a)/auc_a:.2%}")
+
+            #print_latex_table(psd_results, freq_results, paramsets, band)
 
             #ax.set_title(f'{paramsets[0]} vs {param}', fontsize=12)
 
