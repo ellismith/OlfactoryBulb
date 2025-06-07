@@ -21,6 +21,11 @@ import pywt
 from wavelet import *
 from filtering import *
 from stft import *
+from matplotlib.ticker import FuncFormatter
+
+def format_sigfigs(x, pos):
+    return f'{x:.2g}'
+
 
 def plot_spectrogram(ax, f, t, power, wavelet=None, vmin=None, vmax=None, cmap_name='jet'):
     """
@@ -166,14 +171,18 @@ def plot_wavelet_stacked_paramsets(paramsets, lfp_pkl_file='lfp.pkl',
         contour = ax.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
 
         ax.set_xlim(min(t), max(t))
+        ax.set_xticks(np.arange(min(t), max(t), 100.0))
+        tick_start = np.ceil(freq_range[0] / 20) * 20
+        tick_end = np.floor(freq_range[1] / 20) * 20
+        ax.set_yticks(np.arange(tick_start, tick_end + 1, 20))
         ax.set_ylim(freq_range)
-        ax.set_xlabel('Time [ms]', fontsize=14)
-        ax.set_ylabel('Frequency [Hz]', fontsize=14)
-
+        ax.set_xlabel('Time [ms]', fontsize=20)
+        ax.set_ylabel('Frequency [Hz]', fontsize=20)
+        ax.tick_params(axis='both', labelsize=16)
         ax.set_title(str(paramset), fontsize=18)
 
         cbar = plt.colorbar(contour, ax=ax, pad=0.02)
-        cbar.set_label('Wavelet Power', fontsize=14)
+        cbar.set_label('Wavelet Power [$V^2/Hz$]', fontsize=14)
         cbar.ax.tick_params(labelsize=12)
         cbar.formatter = tkr.FormatStrFormatter('%.2f')
         cbar.update_ticks()
@@ -196,15 +205,25 @@ def plot_wavelet_stacked_paramsets(paramsets, lfp_pkl_file='lfp.pkl',
 
 def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
                                    wavelet='cgau5', num_scales=50, freq_range=(20, 200),
-                                   scale_low=1, scale_high=200, vmin=None, vmax=0.35):
+                                   scale_low=1, scale_high=200, vmin=None, vmax=None,
+                                   show_full_raster=False, show_asterisk_annotation=True):
     """
     Vertically stacked wavelet spectrograms and spike/input tick plots.
-    Only the top subplot shows full input rasters.
-    Lower plots show per-sniff first input markers (white lines for M/TCs, asterisks for GCs).
+    
+    Parameters:
+        - paramsets: list of simulation parameter set names.
+        - lfp_pkl_file: LFP data file.
+        - wavelet: wavelet type.
+        - num_scales: number of scales for transform.
+        - freq_range: frequency range for display.
+        - scale_low, scale_high: scale bounds.
+        - vmin, vmax: color scaling for wavelet power.
+        - show_full_raster: if True, display full raster for all subplots.
+        - show_asterisk_annotation: if True, add per-sniff first input annotations.
     """
     n = len(paramsets)
-    fig = plt.figure(figsize=(18, 4 * n))
-    spec = gridspec.GridSpec(n * 2, 1, height_ratios=[0.3, 1] * n)
+    fig = plt.figure(figsize=(18, 6 * n))
+    spec = gridspec.GridSpec(n * 2, 1, height_ratios=[0.5, 1] * n)
 
     for i, paramset in enumerate(paramsets):
         row_base = i * 2
@@ -228,22 +247,18 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
         ax_spec = fig.add_subplot(spec[row_base + 1, 0])
         contour = ax_spec.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
         ax_spec.set_xlim(min(t), max(t))
-        ax_spec.set_ylim(freq_range) #[0], freq_range[1] + 50)  # extend upper y-limit
-        ax_spec.set_ylabel('Frequency [Hz]', fontsize=20)
-        ax_spec.set_xlabel('Time [ms]', fontsize=20)
+        ax_spec.set_ylim(freq_range)
+        ax_spec.set_ylabel('Frequency (Hz)', fontsize=30)
+        ax_spec.set_xlabel('Time (ms)', fontsize=30)
         ax_spec.set_xticks(np.arange(min(t), max(t), 100.0))
-        tick_start = np.ceil(freq_range[0] / 20) * 20
-        tick_end = np.floor(freq_range[1] / 20) * 20
-        ax_spec.set_yticks(np.arange(tick_start, tick_end + 1, 20))
-        ax_spec.tick_params(axis='both', labelsize=16)
-        #ax_spec.set_title(f'{paramset}', fontsize=14, pad=15)  # increase pad to move it up
+        ax_spec.set_yticks(np.arange(np.ceil(freq_range[0] / 20) * 20, np.floor(freq_range[1] / 20) * 20 + 1, 20))
+        ax_spec.tick_params(axis='both', labelsize=20)
 
         # Load input times
         with open(os.path.join(paramset_dir, 'gc_input_times.pkl'), 'rb') as f:
             gc_input_times = cPickle.load(f)
 
-        # Top subplot: full raster
-        if i == 0:
+        if i == 0 or show_full_raster:
             ax_input = fig.add_subplot(spec[row_base, 0], sharex=ax_spec)
             gc_input_times.sort(key=lambda row: row[0])
             i_row = 0
@@ -256,15 +271,13 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
                     ax_input.plot(times, [i_row] * len(times), '|', color=color, ms=8)
                     i_row += 5
             ax_input.set_yticks([])
-            ax_input.set_xticks([])
             ax_input.spines['top'].set_visible(False)
             ax_input.spines['right'].set_visible(False)
             ax_input.spines['left'].set_visible(False)
             ax_input.spines['bottom'].set_visible(False)
-            ax_input.set_ylabel('Odor Inputs', fontsize=16)
-        else:
-            # Below top: single markers per sniff
-            # M/TC inputs: white vertical lines
+            ax_input.set_ylabel('Inputs', fontsize=16)
+        elif show_asterisk_annotation:
+            # Show first-input markers only
             mc_tc_times = []
             for seg, times in events.items():
                 if 'MC' in seg or 'TC' in seg:
@@ -280,9 +293,8 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
                     first_mc_tc_per_sniff.append(times_in_sniff[0])
 
             for t_input in first_mc_tc_per_sniff:
-                ax_spec.axvline(t_input, color='white', linestyle='--', lw=2)
+                ax_spec.axvline(t_input, color='white', linestyle='--', lw=4)
 
-            # GC inputs: orange asterisk
             gc_flat_times = []
             for seg, times in gc_input_times:
                 gc_flat_times.extend(times)
@@ -296,17 +308,18 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
                 if times_in_sniff:
                     first_gc_per_sniff.append(times_in_sniff[0])
 
-            y_pos = freq_range[1] + 12  # a bit above spectrogram
+            y_pos = freq_range[1] + 12
             for t_input in first_gc_per_sniff:
                 ax_spec.plot(t_input, y_pos, marker='*', color='orange', markersize=25, clip_on=False)
 
-    # Add colorbar
+    # Colorbar
     cbar_ax = fig.add_axes([0.92, 0.12, 0.015, 0.3])
-    # Create the colorbar
     cbar = fig.colorbar(contour, cax=cbar_ax)
 
-    # Set the label with desired font size
-    cbar.set_label('Wavelet Power [$V^2/Hz$]', fontsize=14)
+    cbar.set_label('Wavelet Power ($V^2/Hz$)', fontsize=24)
+    cbar.ax.tick_params(labelsize=36)
+    cbar.ax.yaxis.set_major_formatter(FuncFormatter(format_sigfigs))
+
 
     fig.align_xlabels()
     plt.show()
@@ -487,11 +500,11 @@ def plot_lfp_stft_stacked_old(t, lfp, dt, config, lowcut=1, highcut=200, bp_orde
 
 def plot_scalogram(times, frequencies, power, fig_dir, params_filename='default', params_title=''):
     plt.figure(figsize=(27,6))
-    plt.pcolormesh(times, frequencies, power,cmap='Blues')
-    plt.xlabel('Time ($s$)')
-    plt.ylabel('"Frequency" ($Hz$)')
+    plt.pcolormesh(times, frequencies, power,cmap='jet')
+    plt.xlabel('Time ($s$)', size=24)
+    plt.ylabel('"Frequency" ($Hz$)', size=24)
     # plt.yscale('log')
-    plt.colorbar().set_label('LFP Wavelet Power ($V^2/Hz$)')
+    plt.colorbar().set_label('LFP Wavelet Power ($V^2/Hz$)', size=24)
     plt.title(f'{params_title}', fontsize=16, y=1.1, wrap=True)
     #plt.savefig(f"{fig_dir}/scalogram-{params_filename}.jpg", bbox_inches='tight', dpi=300)
     plt.show()
