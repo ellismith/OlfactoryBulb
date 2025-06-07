@@ -184,7 +184,6 @@ def load_result(paramset, lfp_pkl_file='lfp.pkl'):
 
     """
     results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-    print(results_dir)
     
     with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
         params_dict = yaml.load(f, Loader=yaml.FullLoader)
@@ -233,7 +232,7 @@ def load_result(paramset, lfp_pkl_file='lfp.pkl'):
 
     # Band pass filter LFP
     #lfp_bp_beta_gamma = bandpass_filter(lfp, 15, 120, dt, order=6, filter_type='sosfiltfilt')
-    lfp_bp_theta = bandpass_filter(lfp, 3, 12, dt, order=6, filter_type='sosfiltfilt')  
+    lfp_bp_low = bandpass_filter(lfp, 1, 200, dt, order=6, filter_type='sosfiltfilt')  
     lfp_bp_beta = bandpass_filter(lfp, 15, 40, dt, order=6, filter_type='sosfiltfilt')  # 15, 40 Hz, order=4 default
     lfp_bp_gamma = bandpass_filter(lfp, 30, 120, dt, order=6, filter_type='sosfiltfilt')
     lfp_bp_hfo = bandpass_filter(lfp, 130, 200, dt, order=6, filter_type='sosfiltfilt')
@@ -249,9 +248,9 @@ def load_result(paramset, lfp_pkl_file='lfp.pkl'):
     cfs, frequencies = pywt.cwt(lfp, scales, wavelet, dt / 1000.0)  # was lfp_bp_gamma 
     lfp_wavelet_power = np.log(1+abs(cfs))
 
-    print("scale_low:", scale_low)
-    print("scale_high:", scale_high)
-    print("np.max(power) =", np.max(lfp_wavelet_power))
+    #print("scale_low:", scale_low)
+    #print("scale_high:", scale_high)
+    #print("np.max(power) =", np.max(lfp_wavelet_power))
     
    
     if 'sniff_rate' in params_dict:
@@ -282,7 +281,7 @@ def load_result(paramset, lfp_pkl_file='lfp.pkl'):
     # took out t_average, lfp_wavelet_power_average,  before params_dict
     
     # fix functionality later:
-    return events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
+    return events, vs, spike_times, t, lfp, lfp_bp_low, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
         lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict
 
 
@@ -291,10 +290,12 @@ def load_result(paramset, lfp_pkl_file='lfp.pkl'):
 def load_results_for_comparison(paramsets):
     """
     Load results for multiple paramsets.
-    Return lfp_bp_beta, lfp_bp_gamma, and t for each paramset.
+    Return lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, and t for each paramset.
     """
     lfp_bp_beta_all = []
     lfp_bp_gamma_all = []
+    lfp_bp_hfo_all = []
+    lfp_all = []
     t_all = []
     
     # Loop through the paramsets
@@ -303,15 +304,20 @@ def load_results_for_comparison(paramsets):
         lfp_bp_hfo, lfp_wavelet_power, dt, frequencies, t_average, \
         lfp_wavelet_power_average, params_dict = load_result(paramset)
         
-        # Store lfp_bp_beta, lfp_bp_gamma, and t
+        # Store filtered LFP traces and time vector
         lfp_bp_beta_all.append(lfp_bp_beta)
         lfp_bp_gamma_all.append(lfp_bp_gamma)
-        t_all.append(t)  # Store the time vector t for each paramset
+        lfp_bp_hfo_all.append(lfp_bp_hfo)
+        lfp_all.append(lfp)
+        t_all.append(t)
     
-    return lfp_bp_beta_all, lfp_bp_gamma_all, t_all
+    return lfp_all, t_all #_bp_beta_all, lfp_bp_gamma_all, lfp_bp_hfo_all, t_all
 
 
-def get_labels(paramsets, label_with):
+
+
+
+def get_labels(paramsets, label_with, jitter_to_subtract=5):
     """
     Generate labels for a list of parameter set names based on a specified varying parameter.
 
@@ -327,13 +333,15 @@ def get_labels(paramsets, label_with):
     # Loop over all paramsets and extract the corresponding value to label by
     for p in paramsets:
         if p == 'GammaSignature_SetupTime':
-            labels.append("Control")  # Special label for the control condition
+            labels.append("No_centrif_input")  # Special label for the control condition
             continue  # Skip further parsing for control
 
         # Extract delay from second-to-last underscore part, strip "delay"
         if label_with == 'delay':
-            delay = p.split("_")[-2].replace("delay", "")
-            labels.append(f"{delay}")  # e.g., '60' [ms]
+            delay = p.split("_")[-2].replace("delay", "") # e.g., '60' [ms]
+            correction = jitter_to_subtract + 50
+            delay_corrected = int(delay) - correction
+            labels.append(f"{delay_corrected}")  
 
         # Extract weight from third-to-last underscore part, convert "pt5weight" → "0.5"
         elif label_with == 'weight':
