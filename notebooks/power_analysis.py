@@ -11,13 +11,27 @@ import math
 import os
 import yaml
 from pylab import * 
-from scipy import signal
 from scipy.signal import find_peaks, welch, get_window
 #from scipy.signal import ShortTimeFFT
+from scipy.stats import wilcoxon
 import matplotlib.ticker as tkr
+from matplotlib.ticker import ScalarFormatter
 from plot_help import mix_colors
 from load import *
 
+############### SMOOTHING FOR PSD #################
+def smooth_psd(psd, window_len=5):
+    window = np.ones(window_len) / window_len
+    return np.convolve(psd, window, mode='same')
+
+############### STATISTICAL ANALYSIS ###############
+
+def run_wilcoxon_and_print(power1, power2, label1='Set1', label2='Set2'):
+    """
+    Run Wilcoxon signed-rank test on two paired power arrays and print results.
+    """
+    stat, p_val = wilcoxon(power1, power2)
+    print(f"Wilcoxon test comparing {label1} vs {label2}: statistic={stat:.4f}, p-value={p_val:.4e}")
 
 ############### POWER ANALYSIS #################
 
@@ -60,7 +74,6 @@ def calculate_power_psd(signal, fs, window_size=1024, step_size=256, freq_range=
     - power: Mean power in the specified frequency range (V²/Hz).
     """
     freqs, psd = welch(signal, fs=fs, nperseg=window_size, noverlap=window_size//2, window='boxcar')
-    
     # Extract power in the desired frequency range
     valid_idx = np.logical_and(freqs >= freq_range[0], freqs <= freq_range[1])
     power = np.mean(psd[valid_idx])  # Mean power in the band (V²/Hz)
@@ -359,6 +372,7 @@ def calculate_average_power_in_range(lfp_signal, dt_ms, freq_range=(15, 40), npe
 
 
 
+
 def calculate_power_during_inhale_periods(lfp_signal, dt_ms, sniff_duration, inhale_duration, sniff_count, freq_range=(15, 40), nperseg=1024):
     # delete
     """
@@ -395,69 +409,87 @@ def calculate_power_during_inhale_periods(lfp_signal, dt_ms, sniff_duration, inh
     return average_inhale_power
 
 
-def plot_power_or_psd(signals, dt_ms, window_size=1024, step_size=256, freq_range=(15, 200),
-                      colors=None, labels=None, mode='time', ax=None):
+def plot_power_or_psd(signals, dt_ms, freq_range=None, colors=None, labels=None,
+                      mode='psd', ax=None, window_size=1024, step_size=256, ymax=None):
     """
-    Plot either power over time or power spectral density (PSD) for multiple signals.
+    Plot power or PSD for given signals.
 
     Parameters:
-    - signals: List of 1D NumPy arrays, input signals.
-    - dt_ms: Time step in milliseconds.
-    - window_size: Window size (samples) for Welch's method.
-    - step_size: Step size between windows (only relevant for 'time' mode).
-    - freq_range: Tuple of (min_freq, max_freq) to consider.
-    - colors: List of colors for each signal.
-    - labels: List of labels for each signal.
-    - mode: 'time' to plot power over time; 'psd' to plot PSD.
-    - ax: Optional matplotlib Axes object for subplotting.
+    - signals: list of 1D numpy arrays (signals)
+    - dt_ms: sampling interval in ms
+    - freq_range: tuple/list (min_freq, max_freq) for x-axis limits
+    - colors: list of colors for each signal
+    - labels: list of labels for legend
+    - mode: 'psd' or 'time'
+    - ax: matplotlib axis to plot on
+    - window_size: window size for PSD calculation
+    - step_size: step size for PSD calculation
+    - ymax: optional max y-axis limit (float)
+    
+    Returns:
+    - freqs (frequencies)
+    - list of PSD arrays (one per signal)
     """
-    import matplotlib.pyplot as plt
-    from scipy.signal import welch
-    import numpy as np
 
-    fs = 1000.0 / dt_ms
-    n_samples = len(signals[0])
-
-    # Create new figure and axes if not provided
     if ax is None:
-        fig, ax = plt.subplots(figsize=(12, 8))
+        fig, ax = plt.subplots(figsize=(12, 2))
 
-    for i, signal in enumerate(signals):
-        color = colors[i] if colors else f"C{i}"
-        label = labels[i] if labels else f'Signal {i+1}'
+    fs = 1000.0 / dt_ms  # sampling frequency in Hz
 
-        if mode == 'time':
-            power_over_time = []
-            times = np.arange(0, n_samples - window_size, step_size) * dt_ms / 1000  # in seconds
+    psd_list = []
+    freqs = None
 
-            for start in range(0, n_samples - window_size, step_size):
-                segment = signal[start:start + window_size]
-                freqs, psd = welch(segment, fs=fs, nperseg=window_size, noverlap=window_size//2)
-                freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-                power = np.sum(psd[freq_mask])
-                power_over_time.append(power)
+    for i, sig in enumerate(signals):
+        freqs, psd = welch(sig, fs=fs, nperseg=window_size, noverlap=window_size - step_size)
+        #psd_smooth = smooth_psd(psd, window_len=3)
 
-            ax.plot(times, power_over_time, color=color, label=label)
-            ax.set_xlabel("Time (s)")
-            ax.set_ylabel("Power (V²/Hz)")
-            ax.set_title("Power Over Time – Welch Method")
+        #from scipy.signal import savgol_filter
+        #psd_smooth = savgol_filter(psd, window_length=3, polyorder=2)
 
-        elif mode == 'psd':
-            freqs, psd = welch(signal, fs=fs, nperseg=window_size, noverlap=window_size//2)
+        #psd = psd_smooth
+        psd_list.append(psd)
+
+        # Apply freq range mask if given
+        if freq_range is not None:
             freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-            ax.plot(freqs[freq_mask], psd[freq_mask], color=color, label=label)
-            ax.set_xlabel("Frequency [Hz]", size=14)
-            ax.set_ylabel("Power Spectral Density [V²/Hz]", size=14)
-            #ax.set_title("Power Spectral Density – Welch Method")
-
+            plot_freqs = freqs[freq_mask]
+            plot_psd = psd[freq_mask]
         else:
-            raise ValueError("Invalid mode. Choose 'time' or 'psd'.")
+            plot_freqs = freqs
+            plot_psd = psd
 
-    #ax.legend()
-    if ax is None:
-        plt.tight_layout()
-        plt.show()
+        color = colors[i] if colors is not None else None
+        label = labels[i] if labels is not None else None
 
+        ax.plot(plot_freqs, plot_psd, color=color, label=label)
+
+    ax.set_xlabel('Frequency (Hz)', size=30)
+    ax.set_ylabel('PSD ($V^2$/Hz)' if mode == 'psd' else 'Power', size=30)
+    if freq_range is not None:
+        ax.set_xlim(freq_range)
+
+    if ymax is not None:
+        ax.set_ylim(bottom=0, top=ymax)
+    ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))  # force scientific notation
+
+    # Make the exponent (offset text) bigger
+    ax.yaxis.get_offset_text().set_fontsize(14)
+
+    ax.tick_params(labelsize=28)
+    from matplotlib.ticker import FuncFormatter
+
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{x:.2g}"))
+
+    from matplotlib.ticker import LinearLocator
+    #ax.xaxis.set_major_locator(LinearLocator(3))
+    ax.yaxis.set_major_locator(LinearLocator(3))
+    
+
+
+    #if labels is not None:
+    #    ax.legend()
+
+    return freqs, psd_list
 
 
 def plot_band_power_for_paramsets(paramsets, mode='psd', xlim=[130, 200], use_subplots=False):
@@ -470,34 +502,60 @@ def plot_band_power_for_paramsets(paramsets, mode='psd', xlim=[130, 200], use_su
     - xlim: Frequency range to display on the plot (used for x-axis limits in 'psd' mode)
     - use_subplots: If True, use separate subplots for each paramset (except the first)
     """
+    # Set all font sizes to 16 globally
+    plt.rcParams.update({'font.size': 16})
 
-
-    # Load LFP data
     lfp_all, t_all = load_results_for_comparison(paramsets)
     dt_ms = t_all[0][1] - t_all[0][0]  # assumes uniform dt in ms
 
-    # If subplots requested
+    fs = 1000.0 / dt_ms
+
+    # Calculate max PSD across all signals and paramsets (including the first/black trace)
+    max_psd = 0
+    for signal in lfp_all:
+        freqs, psd = welch(signal, fs=fs, nperseg=1024, noverlap=512)
+        freq_mask = (freqs >= xlim[0]) & (freqs <= xlim[1])
+        max_psd = max(max_psd, psd[freq_mask].max())
+        print("max_psd = ", max_psd)
+
     if use_subplots:
         n = len(paramsets) - 1
-        ncols = 2
+        ncols = 1
         nrows = int(np.ceil(n / ncols))
-        fig, axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(12, 4 * nrows))
-        axs = axs.flatten()  # so we can index easily even if 1 row
+        fig, axs = plt.subplots(nrows=nrows, ncols=ncols, figsize=(8, 4 * nrows))
+        axs = axs.flatten()
 
         for i, param in enumerate(paramsets[1:]):
             ax = axs[i]
-            plot_power_or_psd(
+            freq_results, psd_results = plot_power_or_psd(
                 signals=[lfp_all[0], lfp_all[i + 1]],
                 dt_ms=dt_ms,
                 freq_range=xlim,
                 colors=['black', 'red'],
                 labels=[paramsets[0], param],
                 mode=mode,
-                ax=ax
+                ax=ax,
+                ymax= max_psd*1.2
             )
-            ax.set_title(f'{paramsets[0]} vs {param}', fontsize=12)
+            
+            # Wilcoxon test between paramset 0 and current paramset
+            a, b = psd_results
+            print("n = ", len(psd_results))
 
-        # Hide any unused subplots
+            from scipy.stats import wilcoxon
+            stat, p_value = wilcoxon(a, b)
+
+            print(f"Wilcoxon statistic: {stat}")
+            print(f"P-value: {p_value:.4e}")
+
+            alpha = 0.05
+            if p_value < alpha:
+                print("Result is statistically significant (p < 0.05)")
+            else:
+                print("Result is not statistically significant (p ≥ 0.05)")
+
+            #ax.set_title(f'{paramsets[0]} vs {param}', fontsize=12)
+
         for j in range(i + 1, len(axs)):
             axs[j].axis('off')
 
@@ -505,7 +563,6 @@ def plot_band_power_for_paramsets(paramsets, mode='psd', xlim=[130, 200], use_su
         plt.show()
 
     else:
-        # Plot all paramsets on a single plot
         default_colors = [d['color'] for d in plt.rcParams['axes.prop_cycle']]
         colors = ['black'] + default_colors[:len(paramsets) - 1]
 
@@ -517,13 +574,13 @@ def plot_band_power_for_paramsets(paramsets, mode='psd', xlim=[130, 200], use_su
             freq_range=xlim,
             colors=colors,
             labels=paramsets,
-            mode=mode
+            mode=mode,
+            ymax=max_psd*1.2
         )
 
-def compute_band_powers(signal, dt_ms, bands, nperseg=1024):
-    import numpy as np
-    from scipy.signal import welch
 
+
+def compute_band_powers(signal, dt_ms, bands, nperseg=1024):
     freqs, psd = welch(signal, fs=1000/dt_ms, nperseg=nperseg)
     band_powers = {}
     band_psds = {}
@@ -541,8 +598,6 @@ def compute_band_powers(signal, dt_ms, bands, nperseg=1024):
 
 
 def plot_psd_with_band_areas(freqs, psd, band_psds, bands):
-    import matplotlib.pyplot as plt
-
     plt.figure(figsize=(10, 5))
     # Limit to 200 Hz
     max_freq = 200
@@ -594,12 +649,12 @@ def plot_beta_gamma_comparison(paramsets, labels, method="full_time", metric="po
 
             if i == 0:
                 # Show PSD with shaded beta/gamma bands for first paramset
-                plt.figure(figsize=(8, 4))
+                plt.figure(figsize=(8, 8))
                 plt.plot(freqs, psd, label='PSD', color='black')
-                plt.fill_between(freqs, psd, where=(freqs >= beta_band[0]) & (freqs <= beta_band[1]),
-                                color='blue', alpha=0.3, label='Beta (15–40 Hz)')
-                plt.fill_between(freqs, psd, where=(freqs >= gamma_band[0]) & (freqs <= gamma_band[1]),
-                                color='green', alpha=0.3, label='Gamma (30–120 Hz)')
+                #plt.fill_between(freqs, psd, where=(freqs >= beta_band[0]) & (freqs <= beta_band[1]),
+                #                color='blue', alpha=0.3, label='Beta (15–40 Hz)')
+                #plt.fill_between(freqs, psd, where=(freqs >= gamma_band[0]) & (freqs <= gamma_band[1]),
+                #                color='green', alpha=0.3, label='Gamma (30–120 Hz)')
                 plt.xlabel('Frequency (Hz)', size=14)
                 plt.ylabel('Power Spectral Density ($V^2$/Hz)', size=14)
                 plt.title('PSD for First Paramset', size=14)
@@ -618,20 +673,37 @@ def plot_beta_gamma_comparison(paramsets, labels, method="full_time", metric="po
             raise ValueError(f"Unsupported metric: {metric}")
 
     # Plot
-    plt.figure(figsize=(12, 6))
-    plt.scatter(0, beta_values[0], color='blue', marker='s', s=100, label='Beta (first)')
-    plt.scatter(0, gamma_values[0], color='green', marker='s', s=100, label='Gamma (first)')
-    plt.plot(range(1, len(paramsets)), beta_values[1:], color='blue', marker='o', label='Beta')
-    plt.plot(range(1, len(paramsets)), gamma_values[1:], color='green', marker='o', label='Gamma')
+    plt.figure(figsize=(12, 12))
+    plt.scatter(0, beta_values[0], s=100, color='blue', marker='o',label='Beta (first)')
+    plt.scatter(0, gamma_values[0], s=100, color='green', marker='o', label='Gamma (first)')
+    plt.scatter(range(1, len(paramsets)), beta_values[1:], s=100, color='blue', marker='o', label='Beta')
+    plt.scatter(range(1, len(paramsets)), gamma_values[1:], s=100, color='green', marker='o',label='Gamma')
 
     #plt.xlabel(f"{label_with.capitalize()}", size=16)
-    plt.ylabel("Power ($V^2$/Hz)" if metric == "power" else "Dominant Frequency [Hz]", size=16)
-    plt.title(f"Comparison of Beta and Gamma {metric.capitalize()} Across Paramsets ({method})", size=16)
-    plt.xticks(range(len(paramsets)), labels, rotation=0, size=16)
-    plt.yticks(size=16)
+    plt.ylabel("Average Power ($V^2$/Hz)" if metric == "power" else "Dominant Frequency [Hz]", size=32)
+    plt.xlabel("Number of Synaptic Centrifugal Inputs", size=32)
+    plt.title(f"Average Beta and Gamma {metric.capitalize()}", size=32)
+    plt.xticks(range(len(paramsets)), labels, rotation=0, size=28)
+    plt.yticks(size=28)
     plt.grid(True)
     plt.tight_layout()
+    # Format y-axis in scientific notation using tkr alias
+    ax = plt.gca()
+    formatter = tkr.ScalarFormatter(useMathText=False)  # Use E-notation instead of 10^
+    formatter.set_scientific(True)
+    formatter.set_powerlimits((-2, 2))  # Scientific notation if exponent is between 10^-2 and 10^2
+    ax.yaxis.set_major_formatter(formatter)
+    ax.yaxis.get_offset_text().set_fontsize(28)
+    
+    # save as png
+    base_dir = os.path.abspath(os.path.join(os.getcwd(), ".."))
+    save_path = os.path.join(base_dir, "plots")
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)  # Ensure the folder exists
+    filename = os.path.join(save_path, "beta_gamma_plot.png")
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    print(f"Saved to: {os.path.abspath(filename)}")
     #plt.legend()
+    plt.tight_layout()
     plt.show()
 
 
