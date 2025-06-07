@@ -285,9 +285,7 @@ def get_inhale_firing_rate(spiking_cells, spike_times_clean, cell_type, sniff_ra
     return rates
 
 
-
-
-def plot_inst_firing_rate(ax, t, rate_smoothed, col='blue', linewidth=2, label=None):
+def plot_inst_firing_rate(ax, t, rate_smoothed, col, linewidth, label=None, markersize=10):
     """
     Plots the instantaneous firing rate on the given axis.
 
@@ -303,52 +301,19 @@ def plot_inst_firing_rate(ax, t, rate_smoothed, col='blue', linewidth=2, label=N
         Line color.
     linewidth : float
         Width of plotted line.
+    label : str, optional
+        Label for legend.
+    markersize : float, optional
+        Size of marker dots (if markers are used).
     """
-    ax.plot(t, rate_smoothed, color=col, linewidth=linewidth, label=label)
-    ax.set_yticks(range(0, 25, 5))  # from 0 to 100 in steps of 5
-    ax.set_xlabel('Simulation Time [ms]', fontsize=20)
-    ax.set_ylabel('Inst. Rate [Hz]', fontsize=20)
-    ax.tick_params(axis='both', labelsize=16)
-    
+    ax.plot(t, rate_smoothed, color=col, linewidth=linewidth, label=label,
+            marker='o', markersize=markersize)  # marker='o' to show dots
 
+    ax.set_yticks(range(0, 25, 5))
+    ax.set_xlabel('Simulation Time [ms]', fontsize=40)
+    ax.set_ylabel('Inst. Rate [Hz]', fontsize=40)
+    ax.tick_params(axis='both', labelsize=36)
 
-def plot_inst_rate_one_sniff(paramset, cell_type='MC', color='blue', sigma_values=[10], ax=None, label=None, sniff_num=3):
-    if ax is None:
-        fig, ax = plt.subplots()
-
-    # Load simulation data
-    events, vs, spike_times, t, lfp, lfp_bp_theta, lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo, \
-        lfp_wavelet_power, dt, frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset)
-    spiking_cells, spike_times_clean = get_spiking_cells(spike_times)
-
-    # Sniff timing
-    sniff_rate = 5  # 5 Hz sniff rate
-    t_sniff = 1000 / sniff_rate
-    zoom_start = (sniff_num - 1) * t_sniff
-    zoom_end = sniff_num * t_sniff
-
-    for sigma_ms in sigma_values:
-        time_vector, rate_smoothed = get_inst_firing_rate(
-            spiking_cells, spike_times_clean, cell_type=cell_type,
-            dt=dt, duration=t[-1], sigma_ms=sigma_ms
-        )
-
-        # Plot
-        plot_inst_firing_rate(
-            ax=ax,
-            t=time_vector,
-            rate_smoothed=rate_smoothed,
-            col=color,
-            linewidth=2,
-            label=label
-        )
-
-        ax.set_xlim(zoom_start, zoom_end)
-        ax.set_title(f'{paramset}\n{cell_type} Sigma={sigma_ms} ms', fontsize=12)
-        ax.set_ylim(bottom=0)
-        ax.set_xlabel('Time (ms)')
-        ax.set_ylabel('Rate (Hz)')
-        break  # Only first sigma in subplot context
 
 
 def plot_all_sniff_rates(paramsets, sniff_num=3, sigma=15, cell_types=['MC', 'TC', 'GC'], colors=None):
@@ -492,7 +457,7 @@ def plot_firing_rate_across_paramsets(paramsets, labels, sigma=15, sniff_rate=5,
     colors_paramsets = [(0.0, 0.0, 0.0, 1.0)] + colors_paramsets  # First paramset black
     nrows = len(cell_types)
 
-    fig, axes = plt.subplots(nrows, 1, figsize=(8,10), sharex=True)
+    fig, axes = plt.subplots(nrows, 1, figsize=(12, 20), sharex=True)
 
     # Define time window for sniff #4
     t_sniff = 1000 / sniff_rate
@@ -522,25 +487,27 @@ def plot_firing_rate_across_paramsets(paramsets, labels, sigma=15, sniff_rate=5,
                 t=t,
                 rate_smoothed=rate_smoothed,
                 col=colors_paramsets[j % len(colors_paramsets)],
-                linewidth=2,
-                label=paramset
+                linewidth=3,             # Thicker lines
+                label=paramset,
+                markersize=2            # Optional if markers used
             )
 
-            axes[i].set_title(f'{ct} Instantaneous Firing Rate', fontsize=20)
+            axes[i].set_title(f'{ct} Instantaneous Firing Rate', fontsize=40)
             axes[i].set_ylim(0, 45)
-            axes[i].set_yticks(np.linspace(0, 50, 5), size=18)
             axes[i].set_xlim(zoom_start, zoom_end)
-            #axes[i].legend(labels=labels, fontsize=10)
-            axes[i].set_ylabel('Rate (Hz)', fontsize=18)
-            axes[i].set_xticks(np.linspace(zoom_start, zoom_end, 5), size=18)
+            axes[i].set_yticks(np.linspace(0, 50, 5))
+            axes[i].set_xticks(np.linspace(zoom_start, zoom_end, 5))
+            axes[i].tick_params(labelsize=36)  # Set all tick label font sizes
+
+            axes[i].set_ylabel('Rate (Hz)', fontsize=40)
             if i == nrows - 1:
-                axes[i].set_xlabel('Time (ms)', fontsize=18)
+                axes[i].set_xlabel('Time (ms)', fontsize=40)
             else:
                 axes[i].tick_params(labelbottom=True)
 
     plt.tight_layout()
-    #fig.subplots_adjust(hspace=2)  # Increase vertical spacing between subplots
     plt.show()
+
 
 
 def plot_sync_across_paramsets(paramsets, compare_within=True):
@@ -931,8 +898,6 @@ def plot_firing_rates(group_firing_rates):
     plt.grid(axis="y", linestyle="--", alpha=0.7)
     
     plt.show()
-
-
 def plot_group_firing_rates_by_cell_type(paramsets):
     """
     Plots average firing rates per group.
@@ -971,12 +936,11 @@ def plot_group_firing_rates_by_cell_type(paramsets):
         elif group_name.startswith("GC"):
             return (2, group_name)
         else:
-            return (3, group_name)  # unknown types go last
+            return (3, group_name)
 
     all_groups = sorted(set(group for rates in all_group_rates.values() for group in rates),
                         key=cell_type_sort_key)
 
-    
     x = range(len(all_groups))
 
     if len(paramsets) == 1:
@@ -984,7 +948,6 @@ def plot_group_firing_rates_by_cell_type(paramsets):
         paramset = paramsets[0]
         rates = [all_group_rates[paramset].get(group, 0) for group in all_groups]
 
-        # Define color by group prefix
         def get_color(group):
             if group.startswith("TC"):
                 return "magenta"
@@ -997,19 +960,20 @@ def plot_group_firing_rates_by_cell_type(paramsets):
 
         colors = [get_color(group) for group in all_groups]
 
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(12, 8))
         plt.bar(x, rates, color=colors)
         all_groups = ['TC1', 'TC2', 'TC3', 'MC1', 'MC2', 'MC3', 'GC1', 'GC2', 'GC3']
-        plt.xticks(x, all_groups, fontsize=20)
-        plt.yticks(np.arange(0,50,10), fontsize=20)
-        plt.xlabel("Cell Model Type", fontsize=22)
-        plt.ylabel("Average Firing Rate [Hz]", fontsize=22)
-        plt.title(f"Average Group Firing Rates by Cell Model Type", fontsize=24)
+        plt.xticks(x, all_groups, fontsize=36)
+        plt.yticks(np.arange(0, 50, 10), fontsize=36)
+        plt.xlabel("Cell Model Type", fontsize=40)
+        plt.ylabel("Average Firing Rate [Hz]", fontsize=40)
+        plt.title("Average Group Firing Rates by Cell Model Type", fontsize=40)
         plt.tight_layout()
-        # save as png
+
+        # Save as PNG
         base_dir = os.path.abspath(os.path.join(os.getcwd(), ".."))
         save_path = os.path.join(base_dir, "plots")
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)  # Ensure the folder exists
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         filename = os.path.join(save_path, f"group_firingrates_{paramset}.png")
         plt.savefig(filename, dpi=300, bbox_inches='tight')
         print(f"Saved to: {os.path.abspath(filename)}")
@@ -1022,18 +986,24 @@ def plot_group_firing_rates_by_cell_type(paramsets):
         paramset_colors = get_colors_list()
         paramset_colors = [(0.0, 0.0, 0.0, 1.0)] + paramset_colors  # First paramset black
 
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(12, 8))
         for i, paramset in enumerate(paramsets):
             rates = [all_group_rates[paramset].get(group, 0) for group in all_groups]
             x_positions = [xi + (i - len(paramsets) / 2) * offset for xi in x]
-            plt.scatter(x_positions, rates, color=paramset_colors[i], label=paramset, s=50)
+            plt.scatter(x_positions, rates, color=paramset_colors[i], label=paramset, s=200)
 
-        plt.xticks(x, all_groups, fontsize=12)
-        plt.ylabel("Firing Rate (Hz)", fontsize=12)
-        plt.title("Group Firing Rates by Cell Type Across Paramsets", fontsize=14)
-        plt.legend(title="Paramset")
+        plt.xticks(x, all_groups, fontsize=36)
+        plt.yticks(fontsize=36)
+        plt.xlabel("Cell Model Type", fontsize=36)
+        plt.ylabel("Average Overall Firing Rate (Hz)", fontsize=36)
+        #plt.title("Group Firing Rates by Cell Type Across Paramsets", fontsize=40)
+        #plt.legend(title="Paramset", fontsize=28, title_fontsize=30)
+        # Force custom tick labels for consistent display
+        custom_labels = ['TC1', 'TC2', 'TC3', 'MC1', 'MC2', 'MC3', 'GC1', 'GC2', 'GC3']
+        plt.xticks(x, custom_labels, fontsize=36)
         plt.tight_layout()
         plt.show()
+
 
 
 def plot_spikes_dots(spike_times):
@@ -1045,6 +1015,24 @@ def plot_spikes_dots(spike_times):
     cell_type_colors = {}
 
     i = 0
+    # Sort by cell type (TC < MC < GC) and then by numeric index
+    def sort_key(item):
+        seg, _ = item
+        if 'TC' in seg:
+            prefix = 0
+        elif 'MC' in seg:
+            prefix = 1
+        elif 'GC' in seg:
+            prefix = 2
+        else:
+            prefix = 3  # unknown types go last
+        # Extract the number from the name, e.g., 'TC3[0].soma' → 3
+        num = int(''.join(filter(str.isdigit, seg.split('[')[0][2:])))
+        
+        return (prefix, num)
+
+    spike_times = sorted(spike_times, key=sort_key)
+
     for seg, times in spike_times:
         if 'MC' in seg:
             col = 'blue'
@@ -1144,6 +1132,28 @@ def plot_spikes_raster(spike_times, ax):
     cell_type_colors = {}
 
     i = 0  # Track only spiking neurons
+    
+    # Correct sorting: TC before MC before GC, and within each, sort by number ascending
+    def sort_key(item):
+        seg, _ = item
+        if seg.startswith("TC"):
+            cell_order = 0
+        elif seg.startswith("MC"):
+            cell_order = 1
+        elif seg.startswith("GC"):
+            cell_order = 2
+        else:
+            cell_order = 3  # unknown types last
+
+        # Extract the numeric part after the cell type prefix (e.g., 'TC3[0].soma' -> 3)
+        num_str = ''.join(filter(str.isdigit, seg[2:].split('[')[0]))
+        cell_num = int(num_str) if num_str.isdigit() else 0
+        
+        return (cell_order, cell_num)
+
+    # Sort the spike_times list in-place
+    spike_times = sorted(spike_times, key=sort_key)
+
     for seg, times in spike_times:
         if not times:  # Skip neurons with no spikes
             continue
@@ -1164,6 +1174,7 @@ def plot_spikes_raster(spike_times, ax):
         i += 1  # Increment only for spiking neurons
 
     ax.set_xlabel('Simulation Time [ms]', fontsize=16)
+    ax.set_xticks(np.arange(0,1800, 50.0), fontsize=18)
     ax.set_yticks([])  # Remove y-tick labels
 
     # Add custom y-axis labels with larger font size
@@ -1176,11 +1187,9 @@ def plot_spikes_raster(spike_times, ax):
         ax.plot([-0.05, -0.02], [positions[0], positions[0]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
         ax.plot([-0.05, -0.02], [positions[-1], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
         ax.plot([-0.05, -0.05], [positions[0], positions[-1]], color=col, transform=ax.get_yaxis_transform(), clip_on=False)
+        ax.invert_yaxis()
 
 
-
-
-import matplotlib.pyplot as plt
 
 def plot_spike_times_all_cells(spike_ts):
     """
