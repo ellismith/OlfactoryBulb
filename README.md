@@ -359,7 +359,7 @@ Ketamine acts as an NMDA receptor antagonist. The model simulates this through:
 
 ### Model Based On:
 - **Original repository**: [JustasB/OlfactoryBulb](https://github.com/JustasB/OlfactoryBulb)
-- **Publication**: Birgiolas et al. (2020) "Inhibitory microcircuits affect the signal processing of cortex-bound and cortex-originated information differently in the olfactory bulb"
+- **Publication**: Birgiolas et al. (2019)...
 
 ### Key Methods:
 - **LFP simulation**: LFPsimpy library
@@ -389,7 +389,5 @@ If you use this model in your research, please cite:
 Smith, E. (2025). Oscillations in a Computational Subcircuit Model of the Rodent 
 Olfactory Bulb. Doctoral Dissertation, Arizona State University.
 
-Birgiolas, J., Hayden, D., Mart, G., and Crook, S.M. (2020). Inhibitory microcircuits 
-affect the signal processing of cortex-bound and cortex-originated information 
-differently in the olfactory bulb.
+Birgiolas, J., Hayden, D., Mart, G., and Crook, S.M. (2019)...
 ```
