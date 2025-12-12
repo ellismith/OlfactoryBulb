@@ -207,7 +207,7 @@ class OlfactoryBulb:
             [g for g in h.Graph][-1].addvar('LfpElectrode[0].value')
 
         # Ensure results directory is always initialized
-        self.results_dir = os.path.join('results_newcombo4', params.name)
+        self.results_dir = os.path.join('results_subcircuit', params.name)
 
         if autorun:
             
@@ -876,9 +876,9 @@ class OlfactoryBulb:
             syn = self.h.Exp2Syn(seg)
             syn.tau1 = self.params.input_syn_tau1
             syn.tau2 = self.params.input_syn_tau2
-            centrif_delay =105
+            centrif_delay =175
             centrif_weight = 0.5
-            spike_times = self.get_constant_spike_train(start_time=centrif_delay, duration=centrif_duration, frequency=5, jitter=5)
+            spike_times = self.get_constant_spike_train(start_time=centrif_delay, duration=centrif_duration, frequency=5, jitter=35)
             base_frequency = 20  # Hz (gamma-range firing)
             mod_frequency = 5  # Hz (sniff-driven modulation)
             #spike_times = self.get_sinusoidal_spike_train(setup_time, centrif_duration, \
