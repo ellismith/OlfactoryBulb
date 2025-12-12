@@ -123,36 +123,6 @@ The model implements several types of synaptic connections:
 
 ---
 
-## Pharmacological Manipulations
-
-### Simulating Ketamine Administration
-
-Ketamine acts as an NMDA receptor antagonist. The model simulates this through:
-
-![Ketamine Mechanisms](readme_figs/ket_mechs.png)
-*Schematic showing how ketamine affects the dendrodendritic synapse between TCs/MCs and GCs, blocking NMDA receptors while potentially causing compensatory upregulation of AMPA receptors.*
-
-1. **NMDAR Blockade**: Reducing NMDA conductance by multiplying by a scalar factor (<1)
-   - **Implementation**: Modify `gnmda` in `ampanmdasyn.mod`
-   - **Effect**: `inmda = gnmda*(v - E)` results in decreased NMDA current
-
-2. **Compensatory AMPAR Upregulation**: Optionally increase AMPA conductance
-   - Simulates homeostatic plasticity observed experimentally
-
-3. **Key Parameters**:
-   - NMDA toggle factor: 0 (complete block) to 1 (no block)
-   - AMPA scaling factor: >1 for increased AMPAR activity
-
-4. **Effects on Network**:
-   - Increases TC/MC firing rates
-   - Decreases GC firing rates
-   - Modest increases in high-frequency oscillation (HFO) power
-   - Complex effects on gamma oscillations
-
-**Configuration files**: `olfactorybulb/paramsets/case_studies.py`
-
----
-
 ## Analysis Workflows
 
 ### 1. Local Field Potential (LFP) Analysis
@@ -377,6 +347,36 @@ Contains simulation outputs organized by experiment:
 - LFP signals (`.pkl` files)
 - Analysis figures (`.jpg`, `.pdf` files)
 - Parameter configurations (`.yml` files)
+
+---
+
+## Pharmacological Manipulations
+
+### Simulating Ketamine Administration
+
+Ketamine acts as an NMDA receptor antagonist. The model simulates this through:
+
+![Ketamine Mechanisms](readme_figs/ket_mechs.png)
+*Schematic showing how ketamine affects the dendrodendritic synapse between TCs/MCs and GCs, blocking NMDA receptors while potentially causing compensatory upregulation of AMPA receptors.*
+
+1. **NMDAR Blockade**: Reducing NMDA conductance by multiplying by a scalar factor (<1)
+   - **Implementation**: Modify `gnmda` in `ampanmdasyn.mod`
+   - **Effect**: `inmda = gnmda*(v - E)` results in decreased NMDA current
+
+2. **Compensatory AMPAR Upregulation**: Optionally increase AMPA conductance
+   - Simulates homeostatic plasticity observed experimentally
+
+3. **Key Parameters**:
+   - NMDA toggle factor: 0 (complete block) to 1 (no block)
+   - AMPA scaling factor: >1 for increased AMPAR activity
+
+4. **Effects on Network**:
+   - Increases TC/MC firing rates
+   - Decreases GC firing rates
+   - Modest increases in high-frequency oscillation (HFO) power
+   - Complex effects on gamma oscillations
+
+**Configuration files**: `olfactorybulb/paramsets/case_studies.py`
 
 ---
 
