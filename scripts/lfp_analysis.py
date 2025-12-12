@@ -13,7 +13,7 @@ import yaml
 from pylab import * 
 from scipy import signal
 from scipy.interpolate import interp1d
-from scipy.signal import butter, coherence, lfilter, scalogram, sosfilt, stft
+from scipy.signal import butter, coherence, lfilter, sosfilt, stft
 #from scipy.signal import ShortTimeFFT
 import scipy.stats as stats
 import math
@@ -24,68 +24,8 @@ import pandas as pd
 from collections import defaultdict
 from scipy.stats import ttest_ind
 import pyspike as spk
-from filtering import butter_bandpass, butter_bandpass_filter
 from load import get_dirs, get_params, load_result
 from spiking_analysis import *
-
-
-
-def load_result_old(paramset, lfp_pkl_file='lfp.pkl'):
-    """
-    Main function to load simulation results and process LFP signal.
-    """
-    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-
-    params_dict = get_params(paramset_dir)
-    
-    dt = 0.1
-
-    sniff_count = 8
-
-    input_times = load_pickle_data(os.path.join(paramset_dir, 'input_times.pkl'))
-    input_times.sort(key=lambda row: row[0])
-    events = organize_events(input_times)
-
-    spike_times = load_pickle_data(os.path.join(paramset_dir, 'spike_times.pkl'))
-    spike_times.sort(key=lambda row: row[0])
-    spike_events = organize_events(spike_times)
-
-    gc_input_times = load_pickle_data(os.path.join(paramset_dir, 'gc_input_times.pkl'))
-    gc_input_times.sort(key=lambda row: row[0])
-    gc_input_events = organize_events(gc_input_times)
-
-    vs = load_pickle_data(os.path.join(paramset_dir, 'soma_vs.pkl'))
-    print("vs:", vs)
-    vs.sort(key=lambda row: row[0][0:2])
-
-    t, lfp = load_pickle_data(os.path.join(paramset_dir, lfp_pkl_file))
-    t = np.array(t)
-    lfp = np.array(lfp)
-    t, lfp = interpolate(t, lfp, dt)
-
-    lfp_bp_beta, lfp_bp_gamma, lfp_bp_hfo = filter_lfp(lfp, dt)
-    lfp_wavelet_power, scales, frequencies = wavelet_transform(lfp_bp_gamma, dt)
-
-    sniff_rate = 5
-    lfp_wavelet_power_average, step = average_wavelet_power(lfp_wavelet_power, dt, sniff_count, sniff_rate)
-
-    t_average = t[0:step - 2]
-    
-    #return (events, vs, spike_times, gc_input_events, t, lfp, lfp_bp_beta,
-    #        lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, 
-    #        dt, frequencies, t_average, lfp_wavelet_power_average, params_dict)
-
-    return vs
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1239,123 +1179,3 @@ def plot_power_hfo(paramsets):
     ax.set_title('LFP power (130-180 Hz) across electrode locations')
 
     plt.show()
-
-
-
-############################# Old functions ###########################
-
-def plot_scalogram(times, frequencies, power, fig_dir, params_filename='default', params_title=''):
-    plt.figure(figsize=(27,6))
-    plt.pcolormesh(times, frequencies, power,cmap='Blues')
-    plt.xlabel('Time ($s$)')
-    plt.ylabel('"Frequency" ($Hz$)')
-    # plt.yscale('log')
-    plt.colorbar().set_label('LFP Wavelet Power ($V^2/Hz$)')
-    plt.title(f'{params_title}', fontsize=16, y=1.1, wrap=True)
-    #plt.savefig(f"{fig_dir}/scalogram-{params_filename}.jpg", bbox_inches='tight', dpi=300)
-    plt.show()
-
-
-# Wavelet stuff
-
-
-def plot_lfp_wavelet_power(paramset):
-
-    results_dir, paramset_dir, fig_dir = get_dirs(paramset)
-    with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
-        params_dict = yaml.load(f, Loader=yaml.FullLoader)
-
-    if 'dt' in params_dict:
-        dt = params_dict['dt']
-    else:
-        dt = 0.1
-
-    if 'sniff_count' in params_dict:
-        sniff_count = params_dict['sniff_count']
-    else:
-        sniff_count = 8
-
-    events_, vs_, spike_events_, t_lfp_, lfp_, lfp_bp_gamma_, lfp_bp_hfo_, lfp_wavelet_power_, scales_, wavelet_, dt_, \
-        frequencies_, t_average_, lfp_wavelet_power_average_, params_dict_ = load_result("GammaSignature_SetupTime")
-
-    events, vs, spike_events, t_lfp, lfp, lfp_bp_gamma, lfp_bp_hfo, lfp_wavelet_power, scales, wavelet, dt, \
-        frequencies, t_average, lfp_wavelet_power_average, params_dict = load_result(paramset) 
-
-    plt.figure(figsize=(10,8))
-    plt.plot(frequencies, lfp_wavelet_power_average, color='r', alpha=0.2)
-    plt.plot(frequencies_, lfp_wavelet_power_average_, color='b', alpha=0.2)
-    plt.xlabel('Frequency [Hz]', fontsize=20)
-    plt.ylabel('Average LFP Power', fontsize=20)
-    plt.xticks(fontsize=20)
-    plt.yticks(fontsize=20)
-    #plt.title('Frequencies vs Average LFP Wavelet Power')
-
-    plt.savefig(f"{fig_dir}/lfp_power.pdf")
-    plt.show()
-
-
-def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, paramset, fig_dir, params_short=True, params_filename='default', params_title='', show=True, yaxis=True, xlabel=True):
-
-    params_list, params_filename = get_params(paramset)
-    #print("params_filename: ", params_filename)
-
-    # electrode_location = params_dict['electrode_location']
-    if show:
-        plt.subplots(figsize=(4, 5))
-
-    #colors = cm.get_cmap('jet', 200)
-    plt.contourf(t_average, frequencies, lfp_wavelet_power_average, levels=256, \
-                 vmin = 0, vmax = 0.15, cmap='jet')  # vmax = 0.08 raw lfp
-    plt.xlim((0,200))
-    plt.ylim((10, 120))  # 20, 180 default
-
-    if yaxis:
-        plt.ylabel('Frequency [Hz]', fontsize=14)
-    else:
-        cur_axes = plt.gca()
-        cur_axes.axes.get_yaxis().set_visible(False)
-
-    if xlabel:
-        plt.xlabel('Time Since Sniff Onset [ms]', fontsize=14)
-
-
-    plt.xticks(np.arange(round(min(t_average)), max(t_average)+1, 50.0)[:-1], fontsize = 14)
-    #plt.title(f'{params_title}', fontsize=16, y=1.1, wrap=True)
-
-    # plt.savefig(f"{fig_dir}/fingerprint-{params_filename}.pdf", bbox_inches='tight')
-    plt.savefig(f"{fig_dir}/sniff_average-{params_filename}.jpg", bbox_inches='tight', dpi=300)
-
-    if show:
-        plt.show()
-
-
-def plot_average_vs_paramsets(sets, paramset, fig_dir, labels=None):
-    # wavelet scalogram
-    count = len(sets)
-
-    #fig = plt.figure()
-    plt.subplots(figsize=(count*4, 5))
-
-    for i, paramset in enumerate(sets):
-        plt.subplot(1, count, i+1)
-
-        #paramset_dir = os.path.join(results_dir, paramset)
-        with open(os.path.join(paramset_dir, 'params.yml'), 'rb') as f:
-            params_dict = yaml.load(f, Loader=yaml.FullLoader)
-
-        dt = params_dict['dt']
-        sniff_count = params_dict['sniff_count']
-
-        events, vs, spike_times, t_lfp, lfp, lfp_bp_beta, lfp_bp_gamma, lfp_wavelet_power, \
-            frequencies, t_average, lfp_wavelet_power_average = load_result(paramset)
-
-        plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average,
-                           paramset, fig_dir, show=False,
-                           yaxis=i == 0, xlabel=i == count/2)
-        if labels is not None:
-            plt.title(labels[i])
-
-
-    plt.subplots_adjust(wspace=0, hspace=0)
-    plt.show()
-
