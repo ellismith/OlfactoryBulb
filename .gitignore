@@ -130,3 +130,25 @@ doctrees/
 # parameters
 *.yml
 
+# Local IDE settings
+.vscode/
+
+# Simulation outputs
+results/
+results_subcircuit/
+olfactorybulb/slices_local/
+
+# Auto-generated documentation
+docs/
+docs-source/
+
+# Temporary or backup notebooks
+*copy.ipynb
+*orig.ipynb
+*backup*.ipynb
+
+# Notebook subfolders
+notebooks/edf_files/
+notebooks/scalogram.py
+notebooks/ml.py
+notebooks/jb.py
