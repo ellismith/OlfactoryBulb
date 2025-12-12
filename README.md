@@ -1,6 +1,6 @@
 # Olfactory Bulb Model
 
-This repository contains code and analysis for simulating the olfactory bulb network. It is based on the original [JustasB/OlfactoryBulb](https://github.com/JustasB/OlfactoryBulb) repository, with updates and reorganizations to improve usability and analysis workflows.
+This repository contains code and analysis for simulating the olfactory bulb network. It is based on the original [JustasB/OlfactoryBulb](https://github.com/JustasB/OlfactoryBulb) repository, with additional manipulations and analysis methods.
 
 The model simulates a subcircuit of the mouse main olfactory bulb containing tufted cells (TCs), mitral cells (MCs), and granule cells (GCs) with realistic three-dimensional morphologies and connectivity. It serves as a platform for *in silico* physiology experiments examining oscillatory dynamics, synaptic mechanisms, and pharmacological manipulations.
 
@@ -34,32 +34,6 @@ OlfactoryBulb-1/
 ├── readme_figs/             # Figures used in this README
 └── ...                      # Other folders (prev_ob_models, etc.)
 ```
-
----
-
-## Quick Start
-
-1. Clone this repository and enter the folder:
-
-```bash
-git clone <your-fork-url>
-cd OlfactoryBulb-1
-```
-
-2. Install required Python packages (recommended in a virtual environment):
-
-```bash
-pip install -r requirements.txt
-```
-
-3. Add the `scripts/` folder to your Python path in notebooks:
-
-```python
-import sys
-sys.path.append("../scripts")
-```
-
-4. Run the notebooks in `notebooks/` for analysis, or use scripts in `scripts/` for batch processing.
 
 ---
 
@@ -103,17 +77,18 @@ The model implements several types of synaptic connections:
 - **Key function**: `add_gap_junctions()` in `olfactorybulb/model.py`
 - **Modulation**: Can be blocked by setting maximum conductance to zero
 
-#### 3. Centrifugal Feedback Inputs
+#### 3. Odor Inputs
+- **Target**: TC and MC apical dendrites in glomerular layer
+- **Implementation**: Excitatory spike trains based on experimental odor response patterns, with spikes delivered to excitatory synapses placed in each TC or MC’s apical dendrites
+- **Patterns**: Different odor stimuli ('Apple', 'Pear', etc.) with distinct spatiotemporal profiles based on optical glomerular imaging experiments (Vincis et al., 2012). Stimulation of glomeruli with realistic activation patterns follow the methods of previous modeling work (Migliore et al., 2014). 
+- **Timing**: The odor input spike times are chosen from a Gaussian distribution with the spike train length corresponding to the inhalation duration. Inhale and exhale durations mimic realistic sniff timing, with inhale duration of 125 ms and a sniff rate of 5 Hz (Manabe and Mori, 2013). The maximum frequency for the inputs is 150 Hz, the maximum firing rate of OSNs (Duchamp-Viret et al., 2000).
+
+#### 4. Centrifugal Feedback Inputs
 - **Target**: Granule cell dendrites in the Granule Cell Layer (GCL)
-- **Source**: Simulates feedback from piriform cortex and other downstream regions
+- **Source**: Simulates feedback from piriform cortex and other downstream regions (Boyd et al., 2012; Markopoulos et al., 2012)
 - **Effect**: Modulates beta oscillations by increasing GC excitability
 - **Key function**: `add_centrifugal_inputs()` in `olfactorybulb/model.py`
 - **Parameters**: Timing, strength, and interval of inputs can be varied
-
-#### 4. Odor Inputs
-- **Target**: TC and MC apical dendrites in glomerular layer
-- **Implementation**: Excitatory spike trains based on experimental odor response patterns
-- **Patterns**: Different odor stimuli ('Apple', 'Pear', etc.) with distinct spatiotemporal profiles
 
 ![Network Schematic](readme_figs/network_schematic.png)
 *Biophysically realistic subcircuit model showing the spatial organization of TCs, MCs, and GCs with their dendritic arbors and synaptic connections. The simulated LFP electrode placement in the GCL is also indicated.*
