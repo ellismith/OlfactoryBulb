@@ -13,7 +13,7 @@ import yaml
 from pylab import * 
 from scipy import signal
 from scipy.interpolate import interp1d
-from scipy.signal import butter, coherence, lfilter, scalogram, sosfilt, stft
+from scipy.signal import butter, coherence, lfilter, sosfilt, stft
 #from scipy.signal import ShortTimeFFT
 from filtering import *
 

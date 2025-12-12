@@ -11,7 +11,7 @@ import os
 import yaml
 from pylab import * 
 from scipy import signal
-from scipy.signal import butter, coherence, lfilter, scalogram, sosfilt, stft
+from scipy.signal import butter, coherence, lfilter, sosfilt, stft
 import matplotlib.cm as cm
 import matplotlib.ticker as tkr
 from matplotlib import gridspec
