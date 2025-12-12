@@ -54,7 +54,7 @@ sys.path.append("../scripts")
 
 ## Example Workflow
 
-![Workflow](readme_figs/workflow.png)
+![Workflow](workflow.png)
 
 This figure shows the main workflow for simulation, analysis, and figure generation. Additional figures and tables describing results will be added here as the project progresses.
 
