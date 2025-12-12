@@ -20,7 +20,7 @@ def get_dirs(paramset='ParameterSetBase'):
     cwd = os.getcwd()
     ob_dir = os.path.dirname(cwd)
 
-    results_dir = os.path.join(ob_dir, 'results_newcombo4')
+    results_dir = os.path.join(ob_dir, 'results_subcircuit')
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
 
