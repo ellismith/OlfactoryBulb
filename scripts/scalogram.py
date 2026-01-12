@@ -206,7 +206,8 @@ def plot_wavelet_stacked_paramsets(paramsets, lfp_pkl_file='lfp.pkl',
 def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
                                    wavelet='cgau5', num_scales=50, freq_range=(20, 200),
                                    scale_low=1, scale_high=200, vmin=None, vmax=None,
-                                   show_full_raster=False, show_asterisk_annotation=True):
+                                   show_full_raster=False, show_asterisk_annotation=True,
+                                   save_dir=None):
     """
     Vertically stacked wavelet scalograms and spike/input tick plots.
     
@@ -220,10 +221,17 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
         - vmin, vmax: color scaling for wavelet power.
         - show_full_raster: if True, display full raster for all subplots.
         - show_asterisk_annotation: if True, add per-sniff first input annotations.
+        - save_dir: if provided, save figure as high-res JPG to this directory using second paramset name.
     """
     n = len(paramsets)
     fig = plt.figure(figsize=(18, 6 * n))
-    spec = gridspec.GridSpec(n * 2, 1, height_ratios=[0.5, 1] * n)
+    
+    # Create custom height ratios and spacing
+    height_ratios = []
+    for i in range(n):
+        height_ratios.extend([0.3, 1])
+    
+    spec = gridspec.GridSpec(n * 2, 1, height_ratios=height_ratios, hspace=0.05)
 
     for i, paramset in enumerate(paramsets):
         row_base = i * 2
@@ -244,22 +252,25 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
             scale_low=scale_low, scale_high=scale_high
         )
 
+        # Add scalogram plot first
         ax_spec = fig.add_subplot(spec[row_base + 1, 0])
         contour = ax_spec.contourf(t, frequencies, wavelet_power, 256, vmin=vmin, vmax=vmax, cmap='jet')
         ax_spec.set_xlim(min(t), max(t))
         ax_spec.set_ylim(freq_range)
-        ax_spec.set_ylabel('Frequency (Hz)', fontsize=30)
-        ax_spec.set_xlabel('Time (ms)', fontsize=30)
+        ax_spec.set_ylabel('Frequency [Hz]', fontsize=30)
+        ax_spec.set_xlabel('Time [ms]', fontsize=30)
         ax_spec.set_xticks(np.arange(min(t), max(t), 100.0))
         ax_spec.set_yticks(np.arange(np.ceil(freq_range[0] / 20) * 20, np.floor(freq_range[1] / 20) * 20 + 1, 20))
         ax_spec.tick_params(axis='both', labelsize=20)
 
-        # Load input times
-        with open(os.path.join(paramset_dir, 'gc_input_times.pkl'), 'rb') as f:
-            gc_input_times = cPickle.load(f)
-
+        # Add input plot
         if i == 0 or show_full_raster:
-            ax_input = fig.add_subplot(spec[row_base, 0], sharex=ax_spec)
+            ax_input = fig.add_subplot(spec[row_base, 0])
+            
+            # Load input times
+            with open(os.path.join(paramset_dir, 'gc_input_times.pkl'), 'rb') as f:
+                gc_input_times = cPickle.load(f)
+            
             gc_input_times.sort(key=lambda row: row[0])
             i_row = 0
             for seg, times in gc_input_times:
@@ -270,13 +281,28 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
                 if color:
                     ax_input.plot(times, [i_row] * len(times), '|', color=color, ms=8)
                     i_row += 5
+            ax_input.set_xlim(min(t), max(t))
             ax_input.set_yticks([])
             ax_input.spines['top'].set_visible(False)
             ax_input.spines['right'].set_visible(False)
             ax_input.spines['left'].set_visible(False)
             ax_input.spines['bottom'].set_visible(False)
             ax_input.set_ylabel('Inputs', fontsize=16)
-        elif show_asterisk_annotation:
+            ax_input.set_xticks([])
+            
+            # Add extra space above the second input plot
+            if i > 0:
+                pos_input = ax_input.get_position()
+                pos_spec = ax_spec.get_position()
+                # Move input down and scalogram down slightly
+                ax_input.set_position([pos_input.x0, pos_input.y0 - 0.08, pos_input.width, pos_input.height])
+                ax_spec.set_position([pos_spec.x0, pos_spec.y0 - 0.08, pos_spec.width, pos_spec.height])
+
+        if show_asterisk_annotation and not (i == 0 or show_full_raster):
+            # Load input times for asterisk annotation
+            with open(os.path.join(paramset_dir, 'gc_input_times.pkl'), 'rb') as f:
+                gc_input_times = cPickle.load(f)
+                
             # Show first-input markers only
             mc_tc_times = []
             for seg, times in events.items():
@@ -316,41 +342,20 @@ def plot_wavelet_stacked_w_inputs(paramsets, lfp_pkl_file='lfp.pkl',
     cbar_ax = fig.add_axes([0.92, 0.12, 0.015, 0.3])
     cbar = fig.colorbar(contour, cax=cbar_ax)
 
-    cbar.set_label('Wavelet Power ($V^2/Hz$)', fontsize=24)
-    cbar.ax.tick_params(labelsize=36)
+    cbar.set_label('Wavelet Power [$V^2$/Hz]', fontsize=24)
+    cbar.ax.tick_params(labelsize=18)
     cbar.ax.yaxis.set_major_formatter(FuncFormatter(format_sigfigs))
 
-
     fig.align_xlabels()
-    plt.show()
-
-
-
-def compute_average(params_dict, t, lfp, dt_ms, wavelet, lowcut, highcut):
-    cfs, frequencies, lfp_wavelet_power  = compute_wavelet_transform(lfp, dt_ms, num_scales=50, wavelet=wavelet, lowcut=lowcut, highcut=highcut, \
-                                scale_low=10, scale_high=2000, bp_order=6, logscales=False)
-        
-
-    print("np.max(power) =", np.max(lfp_wavelet_power))
-        
-    sniff_rate = params_dict['sniff_rate']
-    sniff_count= params_dict['sniff_count']
-
-    # Average spectrum across sniffs
-    sniff_duration = int(1000/sniff_rate)    # default was 200 ms
-    skip_first_n_sniffs = 1
-
-    step = int(round(sniff_duration / dt_ms))
-
-    # range(1,9) for 8 sniffs
-    # [skip_first_n_sniffs:] creates a new Python list with all but the first element 
-    lfp_wavelet_power_per_sniff = np.array([lfp_wavelet_power[:, i*step:(i+1) * step - 2] \
-                                            for i in range(sniff_count + skip_first_n_sniffs)[skip_first_n_sniffs:]])
-    lfp_wavelet_power_average = np.average(lfp_wavelet_power_per_sniff, axis=0)
-
-    t_average = t[0:step-2]
     
-    return t_average, frequencies, lfp_wavelet_power_average
+    # Save as high-resolution JPG if directory provided
+    if save_dir:
+        save_filename = f'{paramsets[1]}.jpg'
+        save_path = os.path.join(save_dir, save_filename)
+        plt.savefig(save_path, format='jpg', dpi=300, bbox_inches='tight', quality=95)
+        print(f"Saved high-resolution JPG to: {save_path}")
+    
+    plt.show()
 
 
 def plot_sniff_average(t_average, frequencies, lfp_wavelet_power_average, wavelet, paramset, vmax):
