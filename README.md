@@ -114,7 +114,7 @@ The model implements several types of synaptic connections:
 - **Key frequency ranges**:
   - Beta: 15-30 Hz
   - Gamma: 30-120 Hz
-  - High Frequency Oscillations (HFO): 120-200 Hz
+  - High Frequency Oscillations (HFO): 130-200 Hz
 - **Low-pass filter**: <200 Hz to remove high-frequency noise
 - **Script**: `scripts/lfp_analysis.py`
 
