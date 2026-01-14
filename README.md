@@ -90,7 +90,7 @@ The model implements several types of synaptic connections:
 - **Key function**: `add_centrifugal_inputs()` in `olfactorybulb/model.py`
 - **Parameters**: Timing, strength, and interval of inputs can be varied
 
-![Network Schematic](readme_figs/network_schematic.png)
+![Network Schematic](readme_figs/10mc_orange.png)
 *Biophysically realistic subcircuit model showing the spatial organization of TCs, MCs, and GCs with their dendritic arbors and synaptic connections. The simulated LFP electrode placement in the GCL is also indicated.*
 
 ![Synapse Totals](readme_figs/synapse_totals.png)
